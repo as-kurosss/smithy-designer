@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #f2f7f3;
+  --color-foreground: #1a2e22;
+  --color-card: #ffffff;
+  --color-card-foreground: #1a2e22;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1a2e22;
+  --color-primary: #059669;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #dcf0e4;
+  --color-secondary-foreground: #064e3b;
+  --color-muted: #e7eeea;
+  --color-muted-foreground: #5b6f63;
+  --color-accent: #d3e9dc;
+  --color-accent-foreground: #064e3b;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #d9e5dc;
+  --color-input: #c2d2c8;
+  --color-ring: #10b981;
+
+  --animate-enter: enter 0.45s ease-out both;
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  ::selection {
+    background-color: #a7f3d0;
+  }
+}
+
+/* Slim green scrollbar for panel lists */
+.panel-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.panel-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.panel-scroll::-webkit-scrollbar-thumb {
+  background: #065f46;
+  border-radius: 999px;
+}

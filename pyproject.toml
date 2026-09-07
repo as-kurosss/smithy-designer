@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "smithy-designer"
+version = "0.1.0"
+description = "Visual flow editor for the smithy RPA engine"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "as-kurosss" }]
+dependencies = [
+    "smithy-py>=0.5.0",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+tui = ["textual>=8.2.8", "rich>=13"]
+dev = ["pytest>=8", "pytest-asyncio>=1.0", "ruff>=0.12", "mypy>=1.18"]
+
+[project.scripts]
+smithy-designer = "smithy_designer.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/smithy_designer"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "A", "SIM", "TCH"]
+ignore = ["TC001", "TC003"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["textual.*", "rich.*"]
+ignore_missing_imports = true

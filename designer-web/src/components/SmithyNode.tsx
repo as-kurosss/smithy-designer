@@ -1,0 +1,377 @@
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { Handle, Position } from "@xyflow/react";
+import type { NodeProps } from "@xyflow/react";
+import type { Condition, LoopSpec, NodeKind, SmithyFlowNode } from "../types";
+
+/* -- double-click label editing ------------------------------------------- */
+
+export interface NodeEditContextValue {
+  editingId: string | null;
+  startEdit: (id: string) => void;
+  commit: (id: string, label: string) => void;
+}
+
+export const NodeEditContext = createContext<NodeEditContextValue>({
+  editingId: null,
+  startEdit: () => undefined,
+  commit: () => undefined,
+});
+
+const LabelEditor = ({
+  nodeId,
+  initial,
+  done,
+  className,
+}: {
+  nodeId: string;
+  initial: string;
+  done: () => void;
+  className?: string;
+}) => {
+  const { commit } = useContext(NodeEditContext);
+  const [val, setVal] = useState(initial);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => ref.current?.select(), []);
+  const finish = () => {
+    commit(nodeId, val.trim());
+    done();
+  };
+  return (
+    <input
+      ref={ref}
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") finish();
+        if (e.key === "Escape") done();
+      }}
+      onBlur={finish}
+      placeholder="label…"
+      className={className}
+      spellCheck={false}
+    />
+  );
+};
+
+function LabelView({ label, className }: { label?: string; className?: string }) {
+  if (!label) return null;
+  return (
+    <span className={`italic leading-tight text-foreground/80 ${className ?? ""}`}>
+      {label}
+    </span>
+  );
+}
+
+const HANDLE =
+  "!h-3 !w-3 !min-w-0 !rounded-full !border-2 !border-card !bg-muted-foreground";
+const ERROR_HANDLE =
+  "!h-3 !w-3 !min-w-0 !rounded-full !border-2 !border-card !bg-destructive";
+const TAG_BOTTOM = "absolute text-[9px] leading-none text-muted-foreground -bottom-3 left-1/2 -translate-x-1/2";
+const TAG_RIGHT = "absolute text-[9px] leading-none text-muted-foreground left-4 -top-0.5";
+const TAG_ERR = "absolute text-[9px] leading-none text-destructive left-4 -top-0.5";
+
+interface ShapeMeta {
+  fill: string;
+  stroke: string;
+  text: string;
+}
+
+const SHAPE_META: Record<NodeKind, ShapeMeta> = {
+  start: { fill: "#d1fae5", stroke: "#10b981", text: "text-emerald-700" },
+  end: { fill: "#fee2e2", stroke: "#ef4444", text: "text-red-700" },
+  if: { fill: "#ede9fe", stroke: "#8b5cf6", text: "text-violet-700" },
+  loop: { fill: "#fef3c7", stroke: "#f59e0b", text: "text-amber-700" },
+  tool: { fill: "#ffffff", stroke: "#059669", text: "text-emerald-800" },
+  set: { fill: "#e0f2fe", stroke: "#0284c7", text: "text-sky-700" },
+};
+
+function shortTool(tool?: string): string {
+  return tool ? tool.replace(/^windows\./, "") : "?";
+}
+
+function condText(c?: Condition): string {
+  if (!c || !c.var) return "condition not set";
+  const noValue = c.op === "exists" || c.op === "is_empty";
+  return noValue ? `${c.var} ${c.op}` : `${c.var} ${c.op} ${JSON.stringify(c.value)}`;
+}
+
+function loopText(l?: LoopSpec): string {
+  if (!l || !l.mode) return "loop not set";
+  if (l.mode === "foreach") return `for ${l.as || "item"} in $${l.var || "?"}`;
+  return `while ${condText(l.condition)} · max ${l.max_iterations ?? "?"}`;
+}
+
+function BreakpointDot() {
+  return (
+    <span
+      className="absolute -left-1.5 -top-1.5 z-10 h-3.5 w-3.5 rounded-full border-2 border-card bg-destructive"
+      title="breakpoint — right-click to remove"
+    />
+  );
+}
+
+function TargetHandles({ hidden }: { hidden?: boolean }) {
+  if (hidden) return null;
+  return (
+    <>
+      <Handle type="target" position={Position.Top} id="in-top" className={HANDLE} />
+      <Handle type="target" position={Position.Left} id="in-left" className={HANDLE} />
+    </>
+  );
+}
+
+/* -- diamond (decision / loop) ------------------------------------------- */
+
+function DiamondNode({
+  id,
+  data,
+  selected,
+}: {
+  id: string;
+  data: SmithyFlowNode["data"];
+  selected?: boolean;
+}) {
+  const kind = data.kind;
+  const meta = SHAPE_META[kind];
+  const isIf = kind === "if";
+  const { editingId, startEdit } = useContext(NodeEditContext);
+  const editing = editingId === id;
+  return (
+    <div
+      onDoubleClick={() => startEdit(id)}
+      className={`relative h-20 w-36 ${selected ? "drop-shadow-lg" : "drop-shadow-md"} ${data.current ? "animate-pulse" : ""}`}
+    >
+      {data.breakpoint && <BreakpointDot />}
+      <svg viewBox="0 0 144 80" className="absolute inset-0 h-full w-full">
+        <polygon
+          points="72,3 141,40 72,77 3,40"
+          fill={meta.fill}
+          stroke={meta.stroke}
+          strokeWidth={selected ? 4 : 2}
+        />
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5 px-6 text-center">
+        <span className={`text-[9px] font-bold uppercase tracking-widest ${meta.text}`}>
+          {isIf ? "If" : "Loop"}
+        </span>
+        {editing ? (
+          <LabelEditor
+            nodeId={id}
+            initial={data.label ?? ""}
+            done={() => startEdit("")}
+            className="pointer-events-auto h-5 w-24 rounded-md border border-ring bg-card px-1 text-center text-[8px] text-foreground outline-none"
+          />
+        ) : (
+          <>
+            <LabelView label={data.label} className="line-clamp-1 w-full text-[8px] font-medium" />
+            <span className="line-clamp-1 w-full text-[8px] leading-tight text-muted-foreground">
+              {isIf ? condText(data.condition) : loopText(data.loop)}
+            </span>
+          </>
+        )}
+      </div>
+      <TargetHandles />
+      <Handle type="source" position={Position.Bottom} id={isIf ? "true" : "body"} className={HANDLE}>
+        <span className={TAG_BOTTOM}>{isIf ? "true" : "body"}</span>
+      </Handle>
+      <Handle
+        type="source"
+        position={Position.Right}
+        id={isIf ? "false" : "done"}
+        className={HANDLE}
+        style={{ top: "72%" }}
+      >
+        <span className={TAG_RIGHT}>{isIf ? "false" : "done"}</span>
+      </Handle>
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="error"
+        className={ERROR_HANDLE}
+        style={{ top: "30%" }}
+      >
+        <span className={TAG_ERR}>err</span>
+      </Handle>
+    </div>
+  );
+}
+
+/* -- stadium (terminator) ------------------------------------------------ */
+
+function StadiumNode({
+  id,
+  data,
+  selected,
+}: {
+  id: string;
+  data: SmithyFlowNode["data"];
+  selected?: boolean;
+}) {
+  const meta = SHAPE_META[data.kind];
+  const label = data.kind === "start" ? "Start" : "End";
+  const { editingId, startEdit } = useContext(NodeEditContext);
+  const editing = editingId === id;
+  return (
+    <div
+      onDoubleClick={() => startEdit(id)}
+      className={`flex h-10 w-24 flex-col items-center justify-center gap-0 rounded-full border-2 bg-card px-2 shadow-md shadow-emerald-600/20 ${
+        selected ? "ring-2 ring-ring" : ""
+      } ${data.current ? "animate-pulse" : ""}`}
+      style={{ borderColor: meta.stroke }}
+    >
+      {data.breakpoint && <BreakpointDot />}
+      {editing ? (
+        <LabelEditor
+          nodeId={id}
+          initial={data.label ?? ""}
+          done={() => startEdit("")}
+          className="h-4 w-20 rounded-md border border-ring bg-card text-center text-[8px] text-foreground outline-none"
+        />
+      ) : (
+        <>
+          <span className={`text-[10px] font-bold uppercase tracking-widest ${meta.text}`}>
+            {label}
+          </span>
+          <LabelView label={data.label} className="line-clamp-1 w-full text-center text-[8px]" />
+        </>
+      )}
+      {data.kind === "start" && (
+        <Handle type="source" position={Position.Bottom} id="out" className={HANDLE} />
+      )}
+      <TargetHandles hidden={data.kind === "start"} />
+    </div>
+  );
+}
+
+/* -- rectangle (set variable) --------------------------------------------- */
+
+function ParallelogramNode({
+  id,
+  data,
+  selected,
+}: {
+  id: string;
+  data: SmithyFlowNode["data"];
+  selected?: boolean;
+}) {
+  const meta = SHAPE_META.set;
+  const { editingId, startEdit } = useContext(NodeEditContext);
+  const editing = editingId === id;
+  const cfg = (data.config ?? {}) as Record<string, unknown>;
+  const varName = String(cfg.var ?? "?");
+  const rawValue = String(cfg.value ?? "");
+  const shown =
+    rawValue === "" ? "" : rawValue.length > 18 ? rawValue.slice(0, 17) + "…" : rawValue;
+  return (
+    <div
+      onDoubleClick={() => startEdit(id)}
+      className={`relative h-14 w-36 ${selected ? "drop-shadow-lg" : "drop-shadow-md"} ${data.current ? "animate-pulse" : ""}`}
+    >
+      {data.breakpoint && <BreakpointDot />}
+      <svg viewBox="0 0 144 56" className="absolute inset-0 h-full w-full">
+        <polygon
+          points="3,3 141,3 141,53 3,53"
+          fill={meta.fill}
+          stroke={meta.stroke}
+          strokeWidth={selected ? 4 : 2}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 px-5 text-center">
+        {editing ? (
+          <LabelEditor
+            nodeId={id}
+            initial={data.label ?? ""}
+            done={() => startEdit("")}
+            className="h-4 w-24 rounded-md border border-ring bg-card text-center text-[8px] text-foreground outline-none"
+          />
+        ) : (
+          <>
+            <span className="truncate font-mono text-[9px] font-bold text-sky-800">
+              ${varName}
+            </span>
+            <LabelView label={data.label} className="line-clamp-1 w-full text-[8px]" />
+            <span className="w-full truncate font-mono text-[8px] text-muted-foreground">
+              = {shown}
+            </span>
+          </>
+        )}
+      </div>
+      <TargetHandles />
+      <Handle type="source" position={Position.Bottom} id="out" className={HANDLE} />
+      <Handle type="source" position={Position.Right} id="error" className={ERROR_HANDLE}>
+        <span className={TAG_ERR}>err</span>
+      </Handle>
+    </div>
+  );
+}
+
+/* -- tool (card) ---------------------------------------------------------- */
+
+function ToolNode({
+  id,
+  data,
+  selected,
+}: {
+  id: string;
+  data: SmithyFlowNode["data"];
+  selected?: boolean;
+}) {
+  const meta = SHAPE_META.tool;
+  const { editingId, startEdit } = useContext(NodeEditContext);
+  const editing = editingId === id;
+  return (
+    <div
+      onDoubleClick={() => startEdit(id)}
+      className={`relative w-36 rounded-xl border-2 bg-card text-card-foreground shadow-md shadow-emerald-600/20 ${
+        selected ? "ring-2 ring-ring" : ""
+      } ${data.current ? "animate-pulse ring-2 ring-amber-500" : ""}`}
+      style={{ borderColor: meta.stroke }}
+    >
+      {data.breakpoint && <BreakpointDot />}
+      <div className="rounded-t-[10px] bg-emerald-600/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-emerald-800">
+        Tool
+      </div>
+      <div className="truncate px-2 pt-0.5 text-xs font-medium">{shortTool(data.tool)}</div>
+      {editing ? (
+        <div className="px-2 pb-0.5">
+          <LabelEditor
+            nodeId={id}
+            initial={data.label ?? ""}
+            done={() => startEdit("")}
+            className="h-4 w-full rounded-md border border-ring bg-card px-1 text-[8px] text-foreground outline-none"
+          />
+        </div>
+      ) : (
+        <LabelView
+          label={data.label}
+          className="block truncate px-2 pb-0.5 text-[8px]"
+        />
+      )}
+      {data.save_as ? (
+        <div className="truncate px-2 pb-0.5 text-[9px] text-muted-foreground">
+          → <span className="font-mono text-primary">${data.save_as}</span>
+        </div>
+      ) : (
+        <div className="pb-1" />
+      )}
+      <TargetHandles />
+      <Handle type="source" position={Position.Bottom} id="out" className={HANDLE} />
+      <Handle type="source" position={Position.Right} id="error" className={ERROR_HANDLE}>
+        <span className={TAG_ERR}>err</span>
+      </Handle>
+    </div>
+  );
+}
+
+/* -- main ------------------------------------------------------------------ */
+
+export default function SmithyNode({ id, data, selected }: NodeProps<SmithyFlowNode>) {
+  if (data.kind === "if" || data.kind === "loop") {
+    return <DiamondNode id={id} data={data} selected={selected} />;
+  }
+  if (data.kind === "set") return <ParallelogramNode id={id} data={data} selected={selected} />;
+  if (data.kind === "tool") return <ToolNode id={id} data={data} selected={selected} />;
+  return <StadiumNode id={id} data={data} selected={selected} />;
+}
