@@ -120,9 +120,7 @@ class NodeCanvas(Widget):
         for y in range(min(y1, y2), max(y1, y2) + 1):
             self._merge(g, x, y, frozenset("ns"), style)
 
-    def _merge(
-        self, g: Grid, x: int, y: int, arms: frozenset[str], style: str
-    ) -> None:
+    def _merge(self, g: Grid, x: int, y: int, arms: frozenset[str], style: str) -> None:
         if not (0 <= x < CANVAS_W and 0 <= y < CANVAS_H):
             return
         cur_ch, _ = g[y][x]
@@ -158,9 +156,7 @@ class NodeCanvas(Widget):
         self._put_text(g, x + 1, y + 1, n.title[: w - 2], inner, w - 2)
         self._put_text(g, x + 1, y + 2, f"[{n.node_id}]", "dim", w - 2)
 
-    def _put_text(
-        self, g: Grid, x: int, y: int, text: str, style: str, width: int
-    ) -> None:
+    def _put_text(self, g: Grid, x: int, y: int, text: str, style: str, width: int) -> None:
         padded = text.center(width)[:width]
         for i, ch in enumerate(padded):
             if ch != " ":

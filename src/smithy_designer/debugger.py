@@ -201,9 +201,7 @@ def _eval_node(node: ast.expr, variables: dict[str, Any]) -> Any:
             raise DebugError("only plain and method calls are allowed")
         args = [_eval_node(arg, variables) for arg in node.args]
         kwargs = {
-            kw.arg: _eval_node(kw.value, variables)
-            for kw in node.keywords
-            if kw.arg is not None
+            kw.arg: _eval_node(kw.value, variables) for kw in node.keywords if kw.arg is not None
         }
         if any(kw.arg is None for kw in node.keywords):
             raise DebugError("**kwargs is not allowed")
@@ -219,9 +217,7 @@ def _eval_node(node: ast.expr, variables: dict[str, Any]) -> Any:
         return {_eval_node(item, variables) for item in node.elts}
     if isinstance(node, ast.Dict):
         return {
-            _eval_node(key, variables) if key is not None else None: _eval_node(
-                value, variables
-            )
+            _eval_node(key, variables) if key is not None else None: _eval_node(value, variables)
             for key, value in zip(node.keys, node.values, strict=True)
         }
     if isinstance(node, ast.JoinedStr):
@@ -306,9 +302,7 @@ class FlowDebugger:
         self._error = None
         self._variables = {}
         self._loops = {}
-        self._breakpoints = {
-            str(b) for b in (doc.get("breakpoints") or []) if isinstance(b, str)
-        }
+        self._breakpoints = {str(b) for b in (doc.get("breakpoints") or []) if isinstance(b, str)}
         self._edges = list(doc.get("edges") or [])
         self._log_entries = []
         self._task = asyncio.get_running_loop().create_task(self._run(doc))
@@ -378,7 +372,7 @@ class FlowDebugger:
                 "error": f"{type(exc).__name__}: {exc}",
             }
         self._repl.append(entry)
-        del self._repl[: -_MAX_REPL]
+        del self._repl[:-_MAX_REPL]
         return {"result": entry["result"], "error": entry["error"]}
 
     def state(self) -> dict[str, Any]:
@@ -397,7 +391,7 @@ class FlowDebugger:
         self._log_entries.append(
             {"ts": time.time(), "level": level, "msg": _short(msg, _LOG_LIMIT)}
         )
-        del self._log_entries[: -_MAX_LOG]
+        del self._log_entries[:-_MAX_LOG]
 
     def _next_by_handle(self, node_id: str, handle: str) -> str | None:
         for edge in self._edges:

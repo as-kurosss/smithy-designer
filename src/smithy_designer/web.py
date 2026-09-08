@@ -103,18 +103,14 @@ def _validate_flow(data: Any) -> dict[str, Any]:
             raise HTTPException(status_code=400, detail="every node needs a string id")
         node_id = str(node["id"])
         if node_id in ids:
-            raise HTTPException(
-                status_code=400, detail=f"duplicate node id: {node_id!r}"
-            )
+            raise HTTPException(status_code=400, detail=f"duplicate node id: {node_id!r}")
         ids.add(node_id)
         kind = str(node.get("kind") or "")
         kinds[node_id] = kind
         if kind == "start":
             starts.append(node_id)
         if kind == "tool" and not node.get("tool"):
-            raise HTTPException(
-                status_code=400, detail=f"tool node {node_id!r} has no 'tool'"
-            )
+            raise HTTPException(status_code=400, detail=f"tool node {node_id!r} has no 'tool'")
 
     if not starts:
         raise HTTPException(status_code=400, detail="flow needs a start node")
