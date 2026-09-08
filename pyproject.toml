@@ -11,7 +11,7 @@ license = "MIT"
 requires-python = ">=3.11"
 authors = [{ name = "as-kurosss" }]
 dependencies = [
-    "smithy-py>=0.5.0",
+    "smithy-engine>=0.5.0",
     "fastapi>=0.115",
     "uvicorn>=0.30",
 ]
@@ -25,6 +25,8 @@ smithy-designer = "smithy_designer.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/smithy_designer"]
+# ship the prebuilt UI inside the wheel (built by CI / manually)
+force-include = { "designer-web/dist" = "src/smithy_designer/static" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
