@@ -1,6 +1,6 @@
 # smithy-designer
 
-Visual flow editor for the [smithy](https://github.com/as-kurosss/smithy-core) RPA engine.
+Visual flow editor for the [smithy](https://github.com/as-kurosss/smithy-engine) RPA engine.
 
 Drag nodes onto the canvas, connect them, configure tool selectors, and debug
 the flow step by step — in the browser, against the local smithy engine.
@@ -53,7 +53,7 @@ The server binds to `127.0.0.1:8756` and serves the prebuilt bundle from
 ## Flow file
 
 The flow document format is versioned — see the
-[flow format contract](https://github.com/as-kurosss/smithy-core#flow-format-v2)
+[flow format contract](https://github.com/as-kurosss/smithy-engine#flow-format-v2)
 in the smithy repo. Current version: **v2**.
 
 ## Development
