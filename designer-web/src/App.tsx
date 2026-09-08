@@ -13,11 +13,13 @@ import {
   useReactFlow,
   type Connection,
 } from "@xyflow/react";
+import { Play, Plus, Save, Workflow } from "lucide-react";
 import { fetchFlow, fetchTools, saveFlow, debugStart, debugAction, debugState, debugEval, debugBreakpoint } from "./api";
 import type { DebugState } from "./debugTypes";
 import { validateFlow } from "./types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import type {
   FlowDoc,
   FlowEdgeDto,
@@ -443,9 +445,9 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col bg-gradient-to-b from-emerald-100/70 via-background to-background text-foreground">
-      <header className="flex items-center gap-3 border-b border-emerald-900/10 bg-card/80 px-4 py-2 backdrop-blur-md">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-700 text-white shadow-md shadow-emerald-600/30">
-          ⚒
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-emerald-900/10 bg-background/80 px-4 backdrop-blur-md">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-700 text-white shadow-md shadow-emerald-600/30">
+          <Workflow className="h-5 w-5" />
         </span>
         <span className="leading-tight">
           <span className="block text-[15px] font-bold tracking-tight">
@@ -455,25 +457,44 @@ export default function App() {
             visual process editor
           </span>
         </span>
-        <Badge variant={dirty ? "secondary" : "outline"}>
-          {legacy ? "v1 file loaded" : "flow v2"} · {dirty ? "unsaved ●" : "saved ✓"}
+        <Badge
+          variant="outline"
+          className={cn(
+            "gap-1.5 font-medium",
+            legacy
+              ? "border-red-200 bg-red-100 text-red-800"
+              : dirty
+                ? "border-amber-200 bg-amber-100 text-amber-800"
+                : "border-emerald-200 bg-emerald-100 text-emerald-800",
+          )}
+        >
+          {(legacy || dirty) && (
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+            </span>
+          )}
+          {legacy ? "v1 file loaded" : "flow v2"} · {dirty ? "unsaved" : "saved"}
         </Badge>
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{status}</span>
         {!debugActive && (
           <Button variant="secondary" size="sm" disabled={loadFailed} onClick={() => void startDebug()}>
+            <Play className="h-4 w-4" />
             Debug
           </Button>
         )}
         <Button variant="outline" size="sm" onClick={newFlow}>
+          <Plus className="h-4 w-4" />
           New
         </Button>
-        <Button size="sm" disabled={loadFailed} onClick={() => void save()}>
-          Save (Ctrl+S)
+        <Button size="sm" disabled={loadFailed} title="Ctrl+S" onClick={() => void save()}>
+          <Save className="h-4 w-4" />
+          Save
         </Button>
       </header>
-      <div className="flex min-h-0 flex-1 p-2 pt-2">
+      <div className="flex min-h-0 flex-1 gap-2 p-3">
         <Toolbox tools={tools} />
-        <div className="mx-2 min-w-0 flex-1 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10" onDrop={onDrop} onDragOver={onDragOver}>
+        <div className="min-w-0 flex-1 overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/10" onDrop={onDrop} onDragOver={onDragOver}>
         <NodeEditContext.Provider value={nodeEditContext}>
           <ReactFlow<SmithyFlowNode, SmithyFlowEdge>
             nodes={nodes}

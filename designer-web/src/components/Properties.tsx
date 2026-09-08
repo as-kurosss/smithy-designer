@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import type { SmithyFlowNode, ToolInfo, ToolSchemaProp } from "../types";
 import { COND_OPS, coerce } from "../types";
 import type { Condition } from "../types";
@@ -9,17 +10,32 @@ import { Button } from "@/components/ui/button";
 import SelectorField, { findSelectorGroups } from "./SelectorField";
 import type { SelectorGroup } from "./SelectorField";
 
-function inputType(prop: ToolSchemaProp): "text" | "number" | "checkbox" | "textarea" {
+function inputType(prop: ToolSchemaProp): "text" | "checkbox" | "textarea" {
   if (prop.enum) return "text";
-  if (prop.type === "integer" || prop.type === "number") return "number";
   if (prop.type === "boolean") return "checkbox";
   if (prop.type === "array" || prop.type === "object") return "textarea";
+  // integers/numbers use a text input too: a plain number or a $var reference
   return "text";
+}
+
+/** JSON when parseable; array fields also accept one item per line. */
+function parseTextareaValue(raw: string, def: ToolSchemaProp): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    if (def.type === "array" && !raw.trim().startsWith("[")) {
+      return raw
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line !== "");
+    }
+    return raw; // keep raw while typing
+  }
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="mb-0.5 block text-[10px] uppercase text-muted-foreground">{children}</span>
+    <span className="mb-1 block text-xs font-medium">{children}</span>
   );
 }
 
@@ -88,8 +104,16 @@ export default function Properties({
 
   if (!node) {
     return (
-      <aside className="panel-scroll w-60 shrink-0 overflow-hidden rounded-xl bg-card p-3 text-xs text-muted-foreground ring-1 ring-foreground/10">
-        Select a node to edit its properties.
+      <aside className="panel-scroll w-60 shrink-0 overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/10">
+        <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+            <SlidersHorizontal className="h-5 w-5" />
+          </span>
+          <p className="text-sm font-medium">No node selected</p>
+          <p className="text-xs text-muted-foreground">
+            Select a node to edit its properties.
+          </p>
+        </div>
       </aside>
     );
   }
@@ -102,7 +126,7 @@ export default function Properties({
   const selectorKeys = new Set(selectorGroups.flatMap((g) => g.keys));
 
   return (
-    <aside className="panel-scroll flex w-60 shrink-0 flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+    <aside className="panel-scroll flex w-60 shrink-0 flex-col overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/10">
       <div className="border-b border-emerald-900/10 px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
         Properties
       </div>
@@ -123,8 +147,9 @@ export default function Properties({
 
         {tool && (
           <>
-            <div className="border-t border-emerald-900/10 pt-2 text-[11px] font-semibold text-primary">
-              {tool.name}
+            <div className="flex items-center gap-2 border-t border-emerald-900/10 pt-2 text-xs font-medium">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+              <span className="break-all font-mono">{tool.name}</span>
             </div>
             {selectorGroups.map((g) => (
               <label key={g.prefix} className="block" title={`${g.label} — XML-like, click to open editor`}>
@@ -158,6 +183,16 @@ export default function Properties({
                         ({def.enum.join(", ")})
                       </span>
                     )}
+                    {(def.type === "integer" || def.type === "number") && (
+                      <span className="ml-1 normal-case text-muted-foreground/70">
+                        · number or $var
+                      </span>
+                    )}
+                    {def.type === "array" && (
+                      <span className="ml-1 normal-case text-muted-foreground/70">
+                        · one per line or JSON
+                      </span>
+                    )}
                   </FieldLabel>
                   {def.enum ? (
                     <Select
@@ -189,20 +224,19 @@ export default function Properties({
                     <Textarea
                       className="h-20 min-h-0 font-mono text-xs"
                       value={typeof value === "string" ? value : JSON.stringify(value)}
-                      onChange={(e) => {
-                        let parsed: unknown = e.target.value;
-                        try {
-                          parsed = JSON.parse(e.target.value);
-                        } catch {
-                          /* keep raw while typing */
-                        }
-                        patch(node.id, { config: { ...d.config, [key]: parsed } });
-                      }}
+                      onChange={(e) =>
+                        patch(node.id, {
+                          config: {
+                            ...d.config,
+                            [key]: parseTextareaValue(e.target.value, def),
+                          },
+                        })
+                      }
                     />
                   ) : (
                     <Input
                       className="h-7 text-xs"
-                      type={kind === "number" ? "number" : "text"}
+                      type="text"
                       value={String(value)}
                       onChange={(e) =>
                         patch(node.id, {
@@ -231,7 +265,7 @@ export default function Properties({
 
         {d.kind === "if" && (
           <div className="border-t border-emerald-900/10 pt-2">
-            <div className="mb-1 text-[11px] font-semibold text-primary">condition</div>
+            <div className="mb-1.5 text-xs font-semibold">condition</div>
             <ConditionEditor
               condition={
                 d.condition ?? { var: "", op: "exists", value: "" } as unknown as Condition
@@ -243,7 +277,7 @@ export default function Properties({
 
         {d.kind === "loop" && (
           <div className="space-y-2 border-t border-emerald-900/10 pt-2">
-            <div className="text-[11px] font-semibold text-primary">loop</div>
+            <div className="text-xs font-semibold">loop</div>
             <label className="block">
               <FieldLabel>mode</FieldLabel>
               <Select
@@ -312,7 +346,7 @@ export default function Properties({
         )}
         {d.kind === "set" && (
           <div className="space-y-2 border-t border-emerald-900/10 pt-2">
-            <div className="text-[11px] font-semibold text-primary">set variable</div>
+            <div className="text-xs font-semibold">set variable</div>
             <label className="block">
               <FieldLabel>name</FieldLabel>
               <Input

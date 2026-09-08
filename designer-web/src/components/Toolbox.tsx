@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { DragEvent } from "react";
+import { AppWindow, ChevronRight, GitBranch, Wrench } from "lucide-react";
 import type { NodeKind, ToolInfo } from "../types";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -14,9 +15,9 @@ const CONTROLS: { kind: NodeKind; label: string }[] = [
 
 type TabId = "controls" | "windows";
 
-const TABS: { id: TabId; label: string; icon?: string; hint?: string }[] = [
-  { id: "controls", label: "Flow", icon: "⬢", hint: "control-flow nodes" },
-  { id: "windows", label: "Windows", icon: "⊞", hint: "windows UI automation tools" },
+const TABS: { id: TabId; label: string; icon: typeof GitBranch; hint?: string }[] = [
+  { id: "controls", label: "Flow", icon: GitBranch, hint: "control-flow nodes" },
+  { id: "windows", label: "Windows", icon: AppWindow, hint: "windows UI automation tools" },
 ];
 
 const CATEGORIES: { label: string; tools: string[] }[] = [
@@ -55,10 +56,13 @@ function ToolItem({ tool }: { tool: ToolInfo }) {
       title={tool.description}
       draggable
       onDragStart={makeDragHandler({ kind: "tool", tool: tool.name })}
-      className="cursor-grab rounded-xl border border-primary/25 bg-secondary px-2.5 py-1.5 font-mono text-xs text-secondary-foreground transition-all hover:border-primary hover:bg-emerald-600/10 hover:text-emerald-900 active:cursor-grabbing"
+      className="cursor-grab rounded-lg border border-emerald-900/10 bg-background px-2 py-1.5 transition-all hover:border-emerald-600/40 hover:bg-emerald-50/50 active:cursor-grabbing"
     >
-      ⚙ {shortName(tool.name)}
-      <div className="truncate font-sans text-[9px] text-muted-foreground">
+      <span className="flex items-center gap-1.5 font-mono text-xs font-medium">
+        <Wrench className="h-3.5 w-3.5 shrink-0 text-emerald-700" />
+        {shortName(tool.name)}
+      </span>
+      <div className="truncate text-[10px] text-muted-foreground">
         {tool.description}
       </div>
     </div>
@@ -94,7 +98,7 @@ export default function Toolbox({ tools }: { tools: ToolInfo[] }) {
   };
 
   return (
-    <aside className="panel-scroll flex w-52 shrink-0 flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+    <aside className="panel-scroll flex w-52 shrink-0 flex-col overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/10">
       <div className="border-b border-emerald-900/10 p-1.5">
         <div className="flex flex-wrap gap-1">
           {TABS.map((t) => (
@@ -104,13 +108,13 @@ export default function Toolbox({ tools }: { tools: ToolInfo[] }) {
               onClick={() => setTab(t.id)}
               title={t.hint}
               className={cn(
-                "flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-all",
+                "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-all",
                 tab === t.id
                   ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/40"
                   : "text-muted-foreground hover:bg-emerald-600/10 hover:text-emerald-900",
               )}
             >
-              {t.icon && <span className="text-[10px]">{t.icon}</span>}
+              <t.icon className="h-3.5 w-3.5 shrink-0" />
               {t.label}
             </button>
           ))}
@@ -124,9 +128,10 @@ export default function Toolbox({ tools }: { tools: ToolInfo[] }) {
               key={c.kind}
               draggable
               onDragStart={makeDragHandler({ kind: c.kind })}
-              className="cursor-grab rounded-xl border border-emerald-900/10 bg-muted px-2.5 py-1.5 text-xs text-muted-foreground transition-all hover:bg-emerald-600/10 hover:text-emerald-900 active:cursor-grabbing"
+              className="flex cursor-grab items-center gap-2 rounded-lg border border-emerald-900/10 bg-background px-2 py-1.5 text-xs font-medium transition-all hover:border-emerald-600/40 hover:bg-emerald-50/50 active:cursor-grabbing"
             >
-              ⬢ {c.label}
+              <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+              {c.label}
             </div>
           ))}
         </div>
@@ -155,14 +160,12 @@ export default function Toolbox({ tools }: { tools: ToolInfo[] }) {
                     onClick={() => toggleGroup(label)}
                     className="flex w-full items-center gap-1 rounded-lg px-1.5 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-all hover:bg-emerald-600/10 hover:text-emerald-900"
                   >
-                    <span
+                    <ChevronRight
                       className={cn(
-                        "inline-block text-[8px] transition-transform",
+                        "h-3 w-3 shrink-0 transition-transform",
                         open && "rotate-90",
                       )}
-                    >
-                      ▶
-                    </span>
+                    />
                     {label}
                     <span className="ml-auto font-sans font-normal normal-case tracking-normal text-muted-foreground/60">
                       {items.length}
@@ -182,7 +185,7 @@ export default function Toolbox({ tools }: { tools: ToolInfo[] }) {
         </>
       )}
 
-      <div className="border-t border-emerald-900/10 px-3 py-2 text-[9px] text-muted-foreground">
+      <div className="border-t border-emerald-900/10 px-3 py-2 text-[10px] text-muted-foreground">
         drag onto canvas · Del removes · right-click node = breakpoint
       </div>
     </aside>

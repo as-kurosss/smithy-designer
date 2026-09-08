@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ToolSchemaProp } from "../types";
@@ -51,7 +52,6 @@ const SELECTOR_ATTRS = [
   "automation_id",
   "control_type",
   "class_name",
-  "pid",
 ] as const;
 
 type SelectorAttr = (typeof SELECTOR_ATTRS)[number];
@@ -107,15 +107,18 @@ export function parseSelector(text: string): {
   let match: RegExpExecArray | null;
   while ((match = re.exec(m[2])) !== null) {
     const key = match[1];
+    if (key === "pid") {
+      return {
+        attrs: {},
+        error: "pid is a separate field — edit it below the selector",
+      };
+    }
     if (!(SELECTOR_ATTRS as readonly string[]).includes(key)) {
       return { attrs: {}, error: `unknown attribute: ${key}` };
     }
     attrs[key as SelectorAttr] = match[2]
       .replace(/\\(.)/g, "$1")
       .replace(/&quot;/g, '"');
-  }
-  if (attrs.pid !== undefined && !/^\d+$/.test(attrs.pid)) {
-    return { attrs: {}, error: "pid must be an integer" };
   }
   if (
     attrs.control_type !== undefined &&
@@ -176,10 +179,6 @@ function SelectorModal({
 
   const save = () => {
     for (const r of rows) {
-      if (r.attr === "pid" && r.value !== "" && !/^\d+$/.test(r.value.trim())) {
-        setError("pid must be a non-negative integer");
-        return;
-      }
       if (
         r.attr === "control_type" &&
         r.value !== "" &&
@@ -216,7 +215,7 @@ function SelectorModal({
             {title}
           </span>
           <Button variant="ghost" size="icon-xs" onClick={onClose} title="close">
-            ✕
+            <X className="h-3 w-3" />
           </Button>
         </div>
         <div className="flex-1 space-y-1.5 overflow-y-auto p-3">
@@ -248,11 +247,8 @@ function SelectorModal({
                   value={r.value}
                   onChange={(e) => setRow(r.attr, e.target.value)}
                   placeholder={r.attr === "name" ? "supports * ? wildcards" : ""}
-                  className={cn(
-                    "h-7 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-ring/50",
-                    r.attr === "pid" && "font-mono",
-                  )}
-                  type={r.attr === "pid" ? "number" : "text"}
+                  className="h-7 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-ring/50"
+                  type="text"
                   spellCheck={false}
                 />
               )}
@@ -262,7 +258,7 @@ function SelectorModal({
                 title={`remove ${r.attr}`}
                 onClick={() => removeRow(r.attr)}
               >
-                ✕
+                <X className="h-3 w-3" />
               </Button>
             </div>
           ))}
@@ -331,7 +327,7 @@ export default function SelectorField({
     const next: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(attrs)) {
       if (v === undefined || v === "") continue;
-      next[k] = k === "pid" ? Number(v) : v;
+      next[k] = v;
     }
     onCommit(next);
     setText(composeSelector(next, group));
@@ -351,7 +347,7 @@ export default function SelectorField({
     const attrs: Record<string, unknown> = {};
     for (const r of rows) {
       if (r.value === "") continue;
-      attrs[r.attr] = r.attr === "pid" ? Number(r.value.trim()) : r.value;
+      attrs[r.attr] = r.value;
     }
     onCommit(attrs);
     setOpen(false);
@@ -390,7 +386,7 @@ export default function SelectorField({
           onClick={() => setOpen(true)}
           className="shrink-0 text-muted-foreground"
         >
-          ▼
+          <ChevronDown className="h-3 w-3" />
         </Button>
       </div>
       {error && <p className="mt-0.5 text-[9px] text-destructive">{error}</p>}

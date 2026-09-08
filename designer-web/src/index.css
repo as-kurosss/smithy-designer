@@ -53,15 +53,71 @@
   }
 }
 
-/* Slim green scrollbar for panel lists */
-.panel-scroll::-webkit-scrollbar {
+/* Slim green scrollbar for panel lists and the debug terminal */
+.panel-scroll::-webkit-scrollbar,
+.terminal-scroll::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-.panel-scroll::-webkit-scrollbar-track {
+.panel-scroll::-webkit-scrollbar-track,
+.terminal-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
-.panel-scroll::-webkit-scrollbar-thumb {
+.panel-scroll::-webkit-scrollbar-thumb,
+.terminal-scroll::-webkit-scrollbar-thumb {
   background: #065f46;
   border-radius: 999px;
+}
+
+/* ReactFlow chrome in the cloud palette */
+.react-flow__controls {
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgb(6 78 59 / 0.1);
+  background: rgb(255 255 255 / 0.9);
+  box-shadow: 0 1px 2px rgb(6 78 59 / 0.08);
+  backdrop-filter: blur(8px);
+}
+.react-flow__controls-button {
+  border-bottom: 1px solid rgb(6 78 59 / 0.1);
+  background: transparent;
+}
+.react-flow__controls-button:last-child {
+  border-bottom: 0;
+}
+.react-flow__controls-button:hover {
+  background: rgb(5 150 105 / 0.1);
+}
+.react-flow__controls-button svg {
+  fill: #5b6f63;
+}
+.react-flow__controls-button:hover svg {
+  fill: #064e3b;
+}
+.react-flow__minimap {
+  overflow: hidden;
+  border-radius: 12px;
+  background: #ffffff;
+}
+.react-flow__attribution {
+  background: transparent;
+  color: rgb(91 111 99 / 0.6);
+}
+.react-flow__node {
+  outline: none;
+}
+.react-flow__node:focus {
+  outline: none;
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #059669;
+}
+.react-flow__connection-path {
+  stroke: #059669;
+}
+.react-flow__handle {
+  transition: transform 0.12s ease-out, background-color 0.12s ease-out;
+}
+.react-flow__handle:hover {
+  transform: scale(1.25);
 }

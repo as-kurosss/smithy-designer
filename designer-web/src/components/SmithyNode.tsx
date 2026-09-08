@@ -65,12 +65,12 @@ function LabelView({ label, className }: { label?: string; className?: string })
 }
 
 const HANDLE =
-  "!h-3 !w-3 !min-w-0 !rounded-full !border-2 !border-card !bg-muted-foreground";
+  "!h-3 !w-3 !min-w-0 !rounded-full !border-2 !border-card !bg-emerald-600";
 const ERROR_HANDLE =
   "!h-3 !w-3 !min-w-0 !rounded-full !border-2 !border-card !bg-destructive";
-const TAG_BOTTOM = "absolute text-[9px] leading-none text-muted-foreground -bottom-3 left-1/2 -translate-x-1/2";
-const TAG_RIGHT = "absolute text-[9px] leading-none text-muted-foreground left-4 -top-0.5";
-const TAG_ERR = "absolute text-[9px] leading-none text-destructive left-4 -top-0.5";
+const TAG_BOTTOM = "absolute text-[9px] font-semibold uppercase leading-none text-emerald-800 -bottom-3 left-1/2 -translate-x-1/2";
+const TAG_RIGHT = "absolute text-[9px] font-semibold uppercase leading-none text-emerald-800 left-4 -top-0.5";
+const TAG_ERR = "absolute text-[9px] font-semibold uppercase leading-none text-destructive left-4 -top-0.5";
 
 interface ShapeMeta {
   fill: string;
@@ -81,10 +81,10 @@ interface ShapeMeta {
 const SHAPE_META: Record<NodeKind, ShapeMeta> = {
   start: { fill: "#d1fae5", stroke: "#10b981", text: "text-emerald-700" },
   end: { fill: "#fee2e2", stroke: "#ef4444", text: "text-red-700" },
-  if: { fill: "#ede9fe", stroke: "#8b5cf6", text: "text-violet-700" },
-  loop: { fill: "#fef3c7", stroke: "#f59e0b", text: "text-amber-700" },
+  if: { fill: "#e0f2fe", stroke: "#0284c7", text: "text-sky-800" },
+  loop: { fill: "#fef3c7", stroke: "#f59e0b", text: "text-amber-800" },
   tool: { fill: "#ffffff", stroke: "#059669", text: "text-emerald-800" },
-  set: { fill: "#e0f2fe", stroke: "#0284c7", text: "text-sky-700" },
+  set: { fill: "#ecfdf5", stroke: "#059669", text: "text-emerald-800" },
 };
 
 function shortTool(tool?: string): string {
@@ -217,7 +217,7 @@ function StadiumNode({
     <div
       onDoubleClick={() => startEdit(id)}
       className={`flex h-10 w-24 flex-col items-center justify-center gap-0 rounded-full border-2 bg-card px-2 shadow-md shadow-emerald-600/20 ${
-        selected ? "ring-2 ring-ring" : ""
+        selected ? "ring-2 ring-emerald-500" : ""
       } ${data.current ? "animate-pulse" : ""}`}
       style={{ borderColor: meta.stroke }}
     >
@@ -288,7 +288,7 @@ function ParallelogramNode({
           />
         ) : (
           <>
-            <span className="truncate font-mono text-[9px] font-bold text-sky-800">
+            <span className="truncate font-mono text-[9px] font-bold text-emerald-800">
               ${varName}
             </span>
             <LabelView label={data.label} className="line-clamp-1 w-full text-[8px]" />
@@ -325,12 +325,12 @@ function ToolNode({
     <div
       onDoubleClick={() => startEdit(id)}
       className={`relative w-36 rounded-xl border-2 bg-card text-card-foreground shadow-md shadow-emerald-600/20 ${
-        selected ? "ring-2 ring-ring" : ""
+        selected ? "ring-2 ring-emerald-500" : ""
       } ${data.current ? "animate-pulse ring-2 ring-amber-500" : ""}`}
       style={{ borderColor: meta.stroke }}
     >
       {data.breakpoint && <BreakpointDot />}
-      <div className="rounded-t-[10px] bg-emerald-600/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-emerald-800">
+      <div className="rounded-t-[10px] bg-emerald-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-emerald-800">
         Tool
       </div>
       <div className="truncate px-2 pt-0.5 text-xs font-medium">{shortTool(data.tool)}</div>

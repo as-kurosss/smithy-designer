@@ -1,14 +1,22 @@
 """Step debugger for v2 flow documents.
 
-Runs a flow graph node by node with pause/resume/step control, a variable
-scope shared with a REPL evaluator, and a structured event log.
+Interactive layer on top of the engine-side :mod:`smithy.flow` executor:
+runs a flow graph node by node with pause/resume/step control, breakpoints,
+a variable scope shared with a REPL evaluator, and a structured event log.
+All node execution (tool calls, interpolation, conditions, loops, ``set``)
+is delegated to :class:`smithy.flow.FlowRunner` — the debugger only owns
+the control flow: gates, retries, breakpoints and the REPL.
 
 Variables:
     * a ``set`` node creates/overwrites a variable with a typed literal
-      (type: auto | string | number | bool | json)
+      (type: auto | string | number | bool | json); the value may
+      reference other variables (``$name``, ``$app.pid``)
     * ``save_as`` on a tool node stores the tool result
-    * ``$name`` inside tool config strings interpolates from the scope
-      (a string that is exactly ``$name`` keeps the value's type)
+    * ``$name`` inside tool config strings interpolates from the scope;
+      paths drill into saved results (``$app.pid``, ``$rows[0].name``) —
+      a string that is a single reference keeps the value's type
+    * ``if`` / ``loop`` conditions accept variables too: ``var`` may be a
+      dotted path (``app.pid``) and ``value`` interpolates ``$refs``
     * the REPL can read variables and assign new ones between steps
 """
 
@@ -16,84 +24,37 @@ from __future__ import annotations
 
 import ast
 import asyncio
-import json
-import operator
-import re
 import time
 from typing import TYPE_CHECKING, Any
+
+from smithy.flow import (
+    FLOW_VERSION,
+    FlowError,
+    FlowRunner,
+    jsonable,
+    short,
+)
 
 if TYPE_CHECKING:
     from smithy.core.registry import ToolRegistry
 
-_FLOW_VERSION = 2
-_VAR_RE = re.compile(r"\$(\w+)")
 _MAX_LOG = 500
 _MAX_REPL = 100
 
-_REPR_LIMIT = 2000
 _LOG_LIMIT = 400
 
 
-class DebugError(Exception):
+class DebugError(FlowError):
     """Raised for debugger misuse or unsupported flow constructs."""
 
 
-def _short(text: str, limit: int = _REPR_LIMIT) -> str:
-    return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
 def _jsonable(value: Any) -> Any:
-    try:
-        return json.loads(json.dumps(value, ensure_ascii=False, default=str))
-    except (TypeError, ValueError):
-        return str(value)
+    return jsonable(value)
 
 
-def _interpolate(value: Any, variables: dict[str, Any]) -> Any:
-    """Substitute ``$name`` in config values from the variable scope."""
-    if isinstance(value, str):
-        exact = _VAR_RE.fullmatch(value)
-        if exact and exact.group(1) in variables:
-            return variables[exact.group(1)]
+# -- REPL sandbox (debugger-only: the flow runner never evaluates Python) --
 
-        def sub(match: re.Match[str]) -> str:
-            name = match.group(1)
-            return str(variables[name]) if name in variables else match.group(0)
-
-        return _VAR_RE.sub(sub, value)
-    if isinstance(value, list):
-        return [_interpolate(item, variables) for item in value]
-    if isinstance(value, dict):
-        return {key: _interpolate(item, variables) for key, item in value.items()}
-    return value
-
-
-def _evaluate_condition(condition: dict[str, Any], variables: dict[str, Any]) -> bool:
-    var = str(condition.get("var") or "")
-    op = str(condition.get("op") or "exists")
-    left: Any = variables.get(var)
-    right: Any = condition.get("value")
-    if op == "exists":
-        return left is not None
-    if op == "is_empty":
-        return left is None or left == "" or left == [] or left == {}
-    try:
-        if op == "eq":
-            return bool(left == right)
-        if op == "ne":
-            return bool(left != right)
-        if op == "contains":
-            return bool(right in left)
-        if op == "not_contains":
-            return bool(right not in left)
-        if op == "gt":
-            return bool(left > right)
-        if op == "lt":
-            return bool(left < right)
-    except TypeError as exc:
-        raise DebugError(f"cannot compare {left!r} {op} {right!r}: {exc}") from exc
-    raise DebugError(f"unknown operator {op!r}")
-
+import operator  # noqa: E402
 
 _SAFE_FUNCS: dict[str, Any] = {
     "len": len,
@@ -235,31 +196,10 @@ def _eval_repl(expression: str, variables: dict[str, Any]) -> str:
             raise DebugError("only simple name assignment is supported (name = expr)")
         value = _eval_node(stmt.value, variables)
         variables[stmt.targets[0].id] = value
-        return _short(repr(value))
+        return short(repr(value))
     if isinstance(stmt, ast.Expr):
-        return _short(repr(_eval_node(stmt.value, variables)))
+        return short(repr(_eval_node(stmt.value, variables)))
     raise DebugError("only expressions and name assignments are supported")
-
-
-def _parse_typed_value(value: Any, vtype: str) -> Any:
-    """Interpret the ``set`` node value according to its declared type."""
-    text = "" if value is None else str(value)
-    if vtype == "string":
-        return text
-    if vtype == "number":
-        try:
-            return int(text)
-        except ValueError:
-            return float(text)  # ValueError propagates as a node failure
-    if vtype == "bool":
-        return text.strip().lower() in ("true", "1", "yes", "on")
-    if vtype == "json":
-        return json.loads(text)  # JSONDecodeError propagates as a node failure
-    # auto: JSON literals when parseable, raw string otherwise
-    try:
-        return json.loads(text)
-    except (json.JSONDecodeError, ValueError):
-        return text
 
 
 class FlowDebugger:
@@ -267,6 +207,7 @@ class FlowDebugger:
 
     def __init__(self, registry: ToolRegistry) -> None:
         self._registry = registry
+        self._runner: FlowRunner | None = None
         self._task: asyncio.Task[None] | None = None
         self._resume = asyncio.Event()
         self._status = "idle"
@@ -275,7 +216,6 @@ class FlowDebugger:
         self._current: str | None = None
         self._error: str | None = None
         self._variables: dict[str, Any] = {}
-        self._loops: dict[str, dict[str, Any]] = {}
         self._breakpoints: set[str] = set()
         self._edges: list[dict[str, Any]] = []
         self._log_entries: list[dict[str, Any]] = []
@@ -287,24 +227,28 @@ class FlowDebugger:
     def start(self, doc: dict[str, Any]) -> dict[str, Any]:
         if self._task is not None and not self._task.done():
             raise DebugError("a debug session is already active — stop it first")
-        if doc.get("version") != _FLOW_VERSION:
+        if doc.get("version") != FLOW_VERSION:
             raise DebugError(f"unsupported flow version {doc.get('version')!r}")
-        nodes = doc.get("nodes") or []
-        start_node = next((n for n in nodes if n.get("kind") == "start"), None)
-        if start_node is None:
+        start = next((n for n in doc.get("nodes") or [] if n.get("kind") == "start"), None)
+        if start is None:
             raise DebugError("flow has no start node")
         self._session += 1
         self._resume = asyncio.Event()
         self._status = "paused"
         self._mode = "step"
         self._pause_requested = False
-        self._current = str(start_node["id"])
+        self._current = str(start["id"])
         self._error = None
         self._variables = {}
-        self._loops = {}
         self._breakpoints = {str(b) for b in (doc.get("breakpoints") or []) if isinstance(b, str)}
         self._edges = list(doc.get("edges") or [])
         self._log_entries = []
+        self._runner = FlowRunner(
+            self._registry,
+            variables=self._variables,
+            edges=self._edges,
+            log=self._log,
+        )
         self._task = asyncio.get_running_loop().create_task(self._run(doc))
         return self.state()
 
@@ -345,6 +289,7 @@ class FlowDebugger:
         self._mode = "step"
         self._resume = asyncio.Event()
         self._breakpoints.clear()
+        self._runner = None
 
     def _on_stale_task_done(self, session: int) -> None:
         if self._session != session:
@@ -385,19 +330,11 @@ class FlowDebugger:
             "repl": self._repl,
         }
 
-    # --------------------------------------------------------------- runner
+    # --------------------------------------------------------------- control
 
     def _log(self, level: str, msg: str) -> None:
-        self._log_entries.append(
-            {"ts": time.time(), "level": level, "msg": _short(msg, _LOG_LIMIT)}
-        )
+        self._log_entries.append({"ts": time.time(), "level": level, "msg": short(msg, _LOG_LIMIT)})
         del self._log_entries[:-_MAX_LOG]
-
-    def _next_by_handle(self, node_id: str, handle: str) -> str | None:
-        for edge in self._edges:
-            if edge.get("source") == node_id and edge.get("source_handle") == handle:
-                return str(edge.get("target"))
-        return None
 
     async def _wait_gate(self) -> None:
         # While a failed node awaits a retry the status stays "error".
@@ -414,105 +351,12 @@ class FlowDebugger:
         await self._resume.wait()
         self._resume.clear()
 
-    async def _run_tool(self, node: dict[str, Any]) -> None:
-        name = str(node.get("tool") or "")
-        if not name:
-            raise DebugError("tool node has no tool name")
-        config = _interpolate(dict(node.get("config") or {}), self._variables)
-        self._log("info", f"▶ {name} {json.dumps(config, ensure_ascii=False, default=str)}")
-        start = time.perf_counter()
-        try:
-            result = await self._registry.execute(name, config)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            self._log("error", f"✗ {name}: {type(exc).__name__}: {exc}")
-            raise
-        elapsed = (time.perf_counter() - start) * 1000
-        rendered = json.dumps(_jsonable(result), ensure_ascii=False, default=str)
-        self._log("info", f"✓ {name} ({elapsed:.0f} ms) → {_short(rendered)}")
-        save_as = node.get("save_as")
-        if save_as:
-            self._variables[str(save_as)] = result
-
-    def _step_loop(self, node: dict[str, Any]) -> str | None:
-        node_id = str(node["id"])
-        spec = dict(node.get("loop") or {})
-        st = self._loops.get(node_id)
-        if st is None:
-            st = self._init_loop(spec)
-            self._loops[node_id] = st
-        if st["mode"] == "foreach":
-            items = st["items"]
-            if st["i"] >= len(items):
-                del self._loops[node_id]
-                self._log("debug", "loop exhausted → done")
-                return self._next_by_handle(node_id, "done")
-            var_name = str(spec.get("as") or "item")
-            self._variables[var_name] = items[st["i"]]
-            self._log("debug", f"loop iteration {st['i'] + 1}/{len(items)} → {var_name}")
-            st["i"] += 1
-            return self._next_by_handle(node_id, "body")
-        if st["i"] >= int(st["max"]):
-            del self._loops[node_id]
-            self._log("error", f"while-loop hit max_iterations={st['max']} → done")
-            return self._next_by_handle(node_id, "done")
-        condition = dict(spec.get("condition") or {})
-        if not _evaluate_condition(condition, self._variables):
-            del self._loops[node_id]
-            self._log("debug", "while condition is false → done")
-            return self._next_by_handle(node_id, "done")
-        st["i"] += 1
-        return self._next_by_handle(node_id, "body")
-
-    def _init_loop(self, spec: dict[str, Any]) -> dict[str, Any]:
-        max_iter = int(spec.get("max_iterations") or 100)
-        if str(spec.get("mode") or "foreach") == "while":
-            return {"mode": "while", "i": 0, "max": max_iter}
-        seq = self._variables.get(str(spec.get("var") or ""))
-        if seq is None:
-            raise DebugError(f"loop variable ${spec.get('var')!r} is not defined")
-        try:
-            items = list(seq)
-        except TypeError:
-            items = [seq]
-        return {"mode": "foreach", "items": items, "i": 0}
-
-    async def _execute_node(self, node: dict[str, Any]) -> str | None:
-        kind = str(node.get("kind") or "")
-        node_id = str(node["id"])
-        if kind == "start":
-            return self._next_by_handle(node_id, "out")
-        if kind == "end":
-            return None
-        if kind == "tool":
-            await self._run_tool(node)
-            return self._next_by_handle(node_id, "out")
-        if kind == "set":
-            cfg = dict(node.get("config") or {})
-            var = str(cfg.get("var") or "")
-            if not var:
-                raise DebugError("set node needs a variable name")
-            value = _parse_typed_value(cfg.get("value"), str(cfg.get("type") or "auto"))
-            self._variables[var] = value
-            self._log("debug", f"set ${var} = {_short(repr(_jsonable(value)))}")
-            return self._next_by_handle(node_id, "out")
-        if kind == "if":
-            condition = dict(node.get("condition") or {})
-            branch = _evaluate_condition(condition, self._variables)
-            self._log(
-                "debug",
-                f"if {condition.get('var')} {condition.get('op')} → {branch}",
-            )
-            return self._next_by_handle(node_id, "true" if branch else "false")
-        if kind == "loop":
-            return self._step_loop(node)
-        raise DebugError(f"unknown node kind {kind!r}")
-
     async def _run(self, doc: dict[str, Any]) -> None:
         nodes = {str(n["id"]): n for n in doc.get("nodes") or []}
         start = next((n for n in doc.get("nodes") or [] if n.get("kind") == "start"), None)
         node: dict[str, Any] | None = start
+        runner = self._runner
+        assert runner is not None
         try:
             while node is not None:
                 self._current = str(node["id"])
@@ -526,7 +370,7 @@ class FlowDebugger:
                 while True:
                     await self._wait_gate()
                     try:
-                        next_id = await self._execute_node(node)
+                        next_id = await runner.execute_node(node)
                         self._error = None
                         break
                     except asyncio.CancelledError:
