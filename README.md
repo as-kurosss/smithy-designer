@@ -56,6 +56,26 @@ The flow document format is versioned — see the
 [flow format contract](https://github.com/as-kurosss/smithy-engine#flow-format-v2)
 in the smithy repo. Current version: **v2**.
 
+## Publishing a flow to smithy-cloud
+
+A flow document runs anywhere the engine runs — including as a process on a
+[smithy-cloud](https://github.com/as-kurosss/smithy-cloud) orchestrator. The
+bundle is engine-agnostic (`flow.json` + a runner shim), so the cloud side
+needs no designer at all:
+
+```bash
+# create an API token once (web UI → avatar → API tokens), then:
+python -m smithy_designer.publish flow.web.json \
+    --url http://your-orchestrator:8000 \
+    --token sct_... \
+    --name my-flow \
+    --deploy AGENT_ID   # optional: also deploy to an agent
+```
+
+The published process runs `flow.json` via the engine's
+`python -m smithy.run_flow` runner at start-up; triggers, queues and logs on
+the orchestrator work with it as with any other process.
+
 ## Development
 
 ```bash
