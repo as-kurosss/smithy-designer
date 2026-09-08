@@ -284,6 +284,7 @@ class FlowDebugger:
         self._edges: list[dict[str, Any]] = []
         self._log_entries: list[dict[str, Any]] = []
         self._repl: list[dict[str, Any]] = []
+        self._session = 0
 
     # ------------------------------------------------------------------ API
 
@@ -296,6 +297,7 @@ class FlowDebugger:
         start_node = next((n for n in nodes if n.get("kind") == "start"), None)
         if start_node is None:
             raise DebugError("flow has no start node")
+        self._session += 1
         self._resume = asyncio.Event()
         self._status = "paused"
         self._mode = "step"
@@ -335,15 +337,28 @@ class FlowDebugger:
             self._breakpoints.discard(node_id)
 
     def stop(self) -> None:
-        if self._task is not None and not self._task.done():
-            self._task.cancel()
-            self._log("info", "debug session stopped")
+        task = self._task
         self._task = None
+        if task is not None and not task.done():
+            session = self._session
+            task.cancel()
+            # Safety net: if a new session started before the old task finished
+            # cancelling, do not clobber the new session's state.
+            task.add_done_callback(lambda _t: self._on_stale_task_done(session))
+            self._log("info", "debug session stopped")
         self._status = "idle"
         self._current = None
         self._mode = "step"
         self._resume = asyncio.Event()
         self._breakpoints.clear()
+
+    def _on_stale_task_done(self, session: int) -> None:
+        if self._session != session:
+            return
+        self._task = None
+        if self._status in ("running", "paused", "error"):
+            self._status = "idle"
+            self._current = None
 
     def eval(self, expression: str) -> dict[str, Any]:
         """Evaluate a REPL expression against (and mutating) the scope."""
@@ -536,3 +551,7 @@ class FlowDebugger:
             self._current = None
         except asyncio.CancelledError:
             raise
+        except Exception as exc:  # noqa: BLE001 - never leave a stale status
+            self._error = f"{type(exc).__name__}: {exc}"
+            self._status = "error"
+            self._current = None

@@ -15,6 +15,7 @@ import {
 } from "@xyflow/react";
 import { fetchFlow, fetchTools, saveFlow, debugStart, debugAction, debugState, debugEval, debugBreakpoint } from "./api";
 import type { DebugState } from "./debugTypes";
+import { validateFlow } from "./types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type {
@@ -33,6 +34,7 @@ import Properties from "./components/Properties";
 import DebugPanel from "./components/DebugPanel";
 
 const nodeTypes = { smithy: SmithyNodeComponent };
+const DRAFT_KEY = "smithy.draft";
 const edgeOptions = {
   type: "smoothstep",
   markerEnd: { type: MarkerType.ArrowClosed, color: "#5b6f63" },
@@ -128,7 +130,35 @@ export default function App() {
   const [debug, setDebug] = useState<DebugState | null>(null);
   const [breakpoints, setBreakpoints] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const rf = useReactFlow<SmithyFlowNode, SmithyFlowEdge>();
+
+  const offerDraftRestore = useCallback(() => {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(DRAFT_KEY);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    try {
+      const doc = JSON.parse(raw) as Partial<FlowDoc>;
+      if (doc.version !== 2 || (doc.nodes?.length ?? 0) === 0) return;
+      if (!window.confirm("Found an unsaved draft from a previous session. Restore it?")) {
+        return;
+      }
+      setNodes((doc.nodes ?? []).map(toFlowNode));
+      setEdges((doc.edges ?? []).map(toFlowEdge));
+      setDirty(true);
+      setStatus("draft restored — Ctrl+S to save");
+    } catch {
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [setNodes, setEdges]);
 
   useEffect(() => {
     fetchTools()
@@ -138,6 +168,7 @@ export default function App() {
       .then(({ exists, flow }) => {
         if (!exists) {
           setNodes(starterDoc().nodes.map(toFlowNode));
+          offerDraftRestore();
           return;
         }
         const f = flow as Partial<FlowDoc> | null;
@@ -145,12 +176,21 @@ export default function App() {
           setLegacy(true);
           setNodes(starterDoc().nodes.map(toFlowNode));
           setStatus("file is v1 (recording) — opened an empty v2 flow");
+          offerDraftRestore();
           return;
         }
         setNodes((f.nodes ?? []).map(toFlowNode));
         setEdges((f.edges ?? []).map(toFlowEdge));
+        offerDraftRestore();
       })
-      .catch((e: Error) => setStatus(`load: ${e.message}`));
+      .catch((e: Error) => {
+        // load failure ≠ empty file: never initialize a phantom canvas,
+        // saving would overwrite the real flow file
+        setLoadFailed(true);
+        setStatus(`load failed: ${e.message} — editing disabled`);
+        offerDraftRestore();
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setNodes, setEdges]);
 
   const addNode = useCallback(
@@ -220,20 +260,32 @@ export default function App() {
   );
 
   const save = useCallback(async () => {
+    if (loadFailed) return;
+    const doc = toDoc(nodes, edges);
+    const problems = validateFlow(doc.nodes, doc.edges);
+    if (problems.length > 0) {
+      setStatus(`validation: ${problems.join("; ")}`);
+      return;
+    }
     if (legacy && !window.confirm(
       "The existing file is a v1 recording. Saving will OVERWRITE it with a v2 flow. Continue?",
     )) {
       return;
     }
     try {
-      await saveFlow(toDoc(nodes, edges));
+      await saveFlow(doc);
       setLegacy(false);
       setDirty(false);
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        /* ignore */
+      }
       setStatus(`saved ${new Date().toLocaleTimeString()}`);
     } catch (e) {
       setStatus(`save failed: ${(e as Error).message}`);
     }
-  }, [nodes, edges, legacy]);
+  }, [nodes, edges, legacy, loadFailed]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -288,8 +340,18 @@ export default function App() {
   }, [currentNodeId, setNodes]);
 
   const startDebug = useCallback(async () => {
+    const doc = { ...toDoc(nodes, edges), breakpoints: [...breakpoints] };
+    const problems = validateFlow(doc.nodes, doc.edges);
+    if (problems.length > 0) {
+      setStatus(`validation: ${problems.join("; ")}`);
+      return;
+    }
+    if (!window.confirm(
+      "Debug executes this flow on the REAL desktop (clicks, typing, processes). Start?",
+    )) {
+      return;
+    }
     try {
-      const doc = { ...toDoc(nodes, edges), breakpoints: [...breakpoints] };
       setDebug(await debugStart(doc));
       setStatus("debug session started");
     } catch (e) {
@@ -351,6 +413,34 @@ export default function App() {
     );
   }, [breakpoints, setNodes]);
 
+  // debounced autosave of the unsaved draft (only while dirty)
+  useEffect(() => {
+    if (!dirty) return;
+    const t = window.setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(toDoc(nodes, edges)));
+      } catch {
+        /* storage full / disabled — best effort */
+      }
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [nodes, edges, dirty]);
+
+  // warn about unsaved work; stop an active debug session on page close
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (debug !== null && debug.status !== "idle" && debug.status !== "finished") {
+        navigator.sendBeacon("/api/debug/stop");
+      }
+      if (dirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty, debug]);
+
   return (
     <div className="flex h-full flex-col bg-gradient-to-b from-emerald-100/70 via-background to-background text-foreground">
       <header className="flex items-center gap-3 border-b border-emerald-900/10 bg-card/80 px-4 py-2 backdrop-blur-md">
@@ -370,14 +460,14 @@ export default function App() {
         </Badge>
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{status}</span>
         {!debugActive && (
-          <Button variant="secondary" size="sm" onClick={() => void startDebug()}>
+          <Button variant="secondary" size="sm" disabled={loadFailed} onClick={() => void startDebug()}>
             Debug
           </Button>
         )}
         <Button variant="outline" size="sm" onClick={newFlow}>
           New
         </Button>
-        <Button size="sm" onClick={() => void save()}>
+        <Button size="sm" disabled={loadFailed} onClick={() => void save()}>
           Save (Ctrl+S)
         </Button>
       </header>

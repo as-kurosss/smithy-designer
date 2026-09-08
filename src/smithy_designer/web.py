@@ -29,6 +29,33 @@ from smithy.core.registry import ToolRegistry
 from smithy_designer.debugger import DebugError, FlowDebugger
 
 _FLOW_VERSION = 2
+_MAX_BODY_BYTES = 1_000_000
+
+# Allowed source handles per node kind.
+_HANDLES_BY_KIND: dict[str, set[str]] = {
+    "start": {"out"},
+    "end": set(),
+    "tool": {"out", "error"},
+    "set": {"out", "error"},
+    "if": {"true", "false", "error"},
+    "loop": {"body", "done", "error"},
+}
+
+
+async def _read_json(request: Request, max_bytes: int = _MAX_BODY_BYTES) -> Any:
+    """Read the request body with a hard size cap (rejects oversized payloads)."""
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > max_bytes:
+        raise HTTPException(status_code=413, detail="request body too large")
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > max_bytes:
+            raise HTTPException(status_code=413, detail="request body too large")
+    try:
+        return json.loads(bytes(body))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="body is not valid JSON") from exc
 
 
 def _registry() -> ToolRegistry:
@@ -67,19 +94,63 @@ def _validate_flow(data: Any) -> dict[str, Any]:
     edges = data.get("edges")
     if not isinstance(nodes, list) or not isinstance(edges, list):
         raise HTTPException(status_code=400, detail="nodes/edges must be lists")
+
     ids: set[str] = set()
+    kinds: dict[str, str] = {}
+    starts: list[str] = []
     for node in nodes:
         if not isinstance(node, dict) or not isinstance(node.get("id"), str):
             raise HTTPException(status_code=400, detail="every node needs a string id")
-        ids.add(str(node["id"]))
+        node_id = str(node["id"])
+        if node_id in ids:
+            raise HTTPException(
+                status_code=400, detail=f"duplicate node id: {node_id!r}"
+            )
+        ids.add(node_id)
+        kind = str(node.get("kind") or "")
+        kinds[node_id] = kind
+        if kind == "start":
+            starts.append(node_id)
+        if kind == "tool" and not node.get("tool"):
+            raise HTTPException(
+                status_code=400, detail=f"tool node {node_id!r} has no 'tool'"
+            )
+
+    if not starts:
+        raise HTTPException(status_code=400, detail="flow needs a start node")
+    if len(starts) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"multiple start nodes: {', '.join(sorted(starts))}",
+        )
+
+    seen_out: dict[tuple[str, str], str] = {}
     for edge in edges:
         if not isinstance(edge, dict):
             raise HTTPException(status_code=400, detail="every edge must be an object")
-        if edge.get("source") not in ids or edge.get("target") not in ids:
+        source = edge.get("source")
+        target = edge.get("target")
+        if source not in ids or target not in ids:
             raise HTTPException(
                 status_code=400,
                 detail=f"edge {edge.get('id')!r} references unknown node",
             )
+        handle = str(edge.get("source_handle") or "")
+        allowed = _HANDLES_BY_KIND.get(kinds[str(source)], set())
+        if handle not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"edge {edge.get('id')!r}: node {source!r} (kind "
+                f"{kinds[str(source)]!r}) has no output handle {handle!r}",
+            )
+        key = (str(source), handle)
+        if key in seen_out:
+            raise HTTPException(
+                status_code=400,
+                detail=f"node {source!r} handle {handle!r} has multiple outgoing "
+                f"edges ({seen_out[key]} and {edge.get('id')!r}) — keep exactly one",
+            )
+        seen_out[key] = str(edge.get("id"))
     return data
 
 
@@ -116,10 +187,7 @@ def create_app(flow_path: Path) -> FastAPI:
 
     @app.put("/api/flow")
     async def write_flow(request: Request) -> dict[str, str]:
-        try:
-            data = await request.json()
-        except Exception as exc:  # noqa: BLE001 - fastapi wraps any parse error
-            raise HTTPException(status_code=400, detail="body is not valid JSON") from exc
+        data = await _read_json(request)
         _validate_flow(data)
         flow_path.parent.mkdir(parents=True, exist_ok=True)
         flow_path.write_text(
@@ -131,10 +199,7 @@ def create_app(flow_path: Path) -> FastAPI:
 
     @app.post("/api/debug/start")
     async def debug_start(request: Request) -> dict[str, Any]:
-        try:
-            data = await request.json()
-        except Exception as exc:  # noqa: BLE001 - fastapi wraps any parse error
-            raise HTTPException(status_code=400, detail="body is not valid JSON") from exc
+        data = await _read_json(request)
         _validate_flow(data)
         try:
             return debugger.start(data)
@@ -158,10 +223,7 @@ def create_app(flow_path: Path) -> FastAPI:
 
     @app.post("/api/debug/breakpoints")
     async def debug_breakpoints(request: Request) -> dict[str, Any]:
-        try:
-            data = await request.json()
-        except Exception as exc:  # noqa: BLE001 - fastapi wraps any parse error
-            raise HTTPException(status_code=400, detail="body is not valid JSON") from exc
+        data = await _read_json(request)
         node_id = data.get("node_id") if isinstance(data, dict) else None
         enabled = data.get("enabled") if isinstance(data, dict) else None
         if not isinstance(node_id, str) or not node_id:
@@ -178,17 +240,14 @@ def create_app(flow_path: Path) -> FastAPI:
 
     @app.post("/api/debug/eval")
     async def debug_eval(request: Request) -> dict[str, Any]:
-        try:
-            data = await request.json()
-        except Exception as exc:  # noqa: BLE001 - fastapi wraps any parse error
-            raise HTTPException(status_code=400, detail="body is not valid JSON") from exc
+        data = await _read_json(request)
         expression = data.get("expression") if isinstance(data, dict) else None
         if not isinstance(expression, str) or not expression.strip():
             raise HTTPException(status_code=400, detail="expression must be a non-empty string")
         return debugger.eval(expression)
 
     @app.get("/api/debug/state")
-    def debug_state() -> dict[str, Any]:
+    async def debug_state() -> dict[str, Any]:
         return debugger.state()
 
     static = _static_dir()
