@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
+import { Settings } from "lucide-react";
 import type { Condition, LoopSpec, NodeKind, SmithyFlowNode } from "../types";
 
 /* -- double-click label editing ------------------------------------------- */
@@ -9,12 +10,14 @@ export interface NodeEditContextValue {
   editingId: string | null;
   startEdit: (id: string) => void;
   commit: (id: string, label: string) => void;
+  openVars: (id: string) => void;
 }
 
 export const NodeEditContext = createContext<NodeEditContextValue>({
   editingId: null,
   startEdit: () => undefined,
   commit: () => undefined,
+  openVars: () => undefined,
 });
 
 const LabelEditor = ({
@@ -370,6 +373,7 @@ function ToolNode({
 /* -- subflow (calls another flow file) ------------------------------------ */
 
 function FlowNode({
+  id,
   data,
   selected,
 }: {
@@ -377,10 +381,10 @@ function FlowNode({
   data: SmithyFlowNode["data"];
   selected?: boolean;
 }) {
+  const { openVars } = useContext(NodeEditContext);
   const cfg = (data.config ?? {}) as Record<string, unknown>;
   const path = String(cfg.path ?? "");
   const name = path ? path.split("/").pop() || path : "pick a flow";
-  const scope = String(cfg.scope ?? "shared");
   return (
     <div
       className={`relative w-36 rounded-xl border-2 bg-card text-card-foreground shadow-md shadow-indigo-600/20 ${
@@ -389,13 +393,24 @@ function FlowNode({
       style={{ borderColor: SHAPE_META.flow.stroke }}
     >
       {data.breakpoint && <BreakpointDot />}
+      <button
+        type="button"
+        title="Inputs & outputs"
+        onClick={(e) => {
+          e.stopPropagation();
+          openVars(id);
+        }}
+        className="nodrag absolute right-1 top-0.5 flex h-4 w-4 items-center justify-center rounded text-indigo-700 hover:bg-white/70"
+      >
+        <Settings className="h-3 w-3" />
+      </button>
       <div className="rounded-t-[10px] bg-indigo-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-indigo-700">
-        Subflow · {scope}
+        Subflow
       </div>
       <div className="truncate px-2 pt-0.5 text-xs font-medium">{name}</div>
       <LabelView label={data.label} className="block truncate px-2 text-[8px]" />
       <div className="truncate px-2 pb-1 font-mono text-[8px] text-muted-foreground">
-        {path || "set path in Properties · double-click to open"}
+        {path || "double-click to open"}
       </div>
       <TargetHandles />
       <Handle type="source" position={Position.Bottom} id="out" className={HANDLE} />

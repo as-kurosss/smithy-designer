@@ -40,6 +40,7 @@ import { flowVarsToRows, rowsToFlowVars, type VarRow } from "./components/Variab
 import Resizer from "./components/Resizer";
 import VariablesPanel from "./components/VariablesPanel";
 import CreateSubflowModal from "./components/CreateSubflowModal";
+import SubflowVarsModal from "./components/SubflowVarsModal";
 
 const nodeTypes = { smithy: SmithyNodeComponent };
 const edgeOptions = {
@@ -107,10 +108,13 @@ function toDoc(
     ...(vars.length > 0 ? { variables: vars } : {}),
     nodes: nodes.map((n) => {
       const d = n.data;
+      const config = { ...(d.config ?? {}) } as Record<string, unknown>;
+      // Subflows always run isolated; scope is not a per-node setting.
+      if (d.kind === "flow") delete config.scope;
       const dto: FlowNodeDto = {
         id: n.id,
         kind: d.kind,
-        config: d.config ?? {},
+        config,
         position: [Math.round(n.position.x), Math.round(n.position.y)],
       };
       if (d.tool) dto.tool = d.tool;
@@ -153,6 +157,7 @@ export default function App() {
   const [consoleHeight, setConsoleHeight] = useState(190);
   const [variablesHeight, setVariablesHeight] = useState(180);
   const [subflowModalOpen, setSubflowModalOpen] = useState(false);
+  const [subflowVarsId, setSubflowVarsId] = useState<string | null>(null);
 
   const loadFlow = useCallback(
     async (path: string) => {
@@ -266,16 +271,6 @@ export default function App() {
     [setNodes],
   );
 
-  const deleteNode = useCallback(
-    (id: string) => {
-      setNodes((ns) => ns.filter((n) => n.id !== id));
-      setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
-      setSelectedId((s) => (s === id ? null : s));
-      setDirty(true);
-    },
-    [setNodes, setEdges],
-  );
-
   const save = useCallback(async (): Promise<boolean> => {
     if (loadFailed) return false;
     const doc = toDoc(nodes, edges, variableRows);
@@ -351,6 +346,7 @@ export default function App() {
   }, [setNodes, setEdges]);
 
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
+  const subflowVarsNode = nodes.find((n) => n.id === subflowVarsId) ?? null;
 
   const debugActive = debug !== null && debug.status !== "idle";
 
@@ -492,7 +488,12 @@ export default function App() {
     },
     [patchNode],
   );
-  const nodeEditContext = { editingId, startEdit, commit: commitLabel };
+  const nodeEditContext = {
+    editingId,
+    startEdit,
+    commit: commitLabel,
+    openVars: (id: string) => setSubflowVarsId(id),
+  };
 
   // keep breakpoint markers on nodes in sync with the set
   useEffect(() => {
@@ -740,7 +741,6 @@ export default function App() {
               tools={tools}
               flows={flows}
               onPatch={patchNode}
-              onDelete={deleteNode}
               onOpenFlow={(path) => void switchFlow(path)}
             />
           </div>
@@ -753,7 +753,12 @@ export default function App() {
             className="min-h-0 shrink-0 overflow-hidden"
             hidden={variablesHeight <= 2}
           >
-            <VariablesPanel rows={variableRows} onChange={setVariableRows} path={activePath} />
+            <VariablesPanel
+              rows={variableRows}
+              onChange={setVariableRows}
+              path={activePath}
+              isMain={flows.find((f) => f.path === activePath)?.is_main ?? true}
+            />
           </div>
         </div>
       </div>
@@ -765,6 +770,13 @@ export default function App() {
         <CreateSubflowModal
           onCreate={(name) => void createSubflow(name)}
           onClose={() => setSubflowModalOpen(false)}
+        />
+      )}
+      {subflowVarsNode && (
+        <SubflowVarsModal
+          node={subflowVarsNode}
+          onPatch={patchNode}
+          onClose={() => setSubflowVarsId(null)}
         />
       )}
     </div>

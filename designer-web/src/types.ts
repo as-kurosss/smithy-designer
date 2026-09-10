@@ -69,6 +69,7 @@ export interface FlowVariable {
 
 export interface FlowDoc {
   version: 2;
+  variable_scope?: "shared" | "isolated";
   variables?: Record<string, string> | FlowVariable[];
   nodes: FlowNodeDto[];
   edges: FlowEdgeDto[];

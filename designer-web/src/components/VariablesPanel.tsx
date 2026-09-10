@@ -5,10 +5,12 @@ export default function VariablesPanel({
   rows,
   onChange,
   path,
+  isMain,
 }: {
   rows: VarRow[];
   onChange: (rows: VarRow[]) => void;
   path: string;
+  isMain: boolean;
 }) {
   return (
     <div className="panel-scroll flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border">
@@ -20,6 +22,22 @@ export default function VariablesPanel({
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <p className="mb-2 text-[10px] leading-snug text-muted-foreground">
+          {isMain ? (
+            <>
+              Name a variable with a{" "}
+              <span className="font-mono font-semibold text-foreground">G_</span> prefix (e.g.{" "}
+              <span className="font-mono">G_report_path</span>) to make it{" "}
+              <span className="font-semibold text-foreground">global</span> — visible in every
+              subflow at any depth.
+            </>
+          ) : (
+            <>
+              All variables here are <span className="font-semibold text-foreground">local</span>
+              ; globals (<span className="font-mono">G_…</span>) from the main flow are readable.
+            </>
+          )}
+        </p>
         <VariableRows rows={rows} onChange={onChange} withTypes />
       </div>
     </div>

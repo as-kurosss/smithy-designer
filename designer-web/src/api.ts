@@ -98,6 +98,26 @@ export async function recordState(): Promise<RecordState> {
   return json(await fetch("/api/record/state"));
 }
 
+export interface ProjectSettings {
+  variable_scope: "shared" | "isolated";
+}
+
+export async function fetchProject(): Promise<ProjectSettings> {
+  return json(await fetch("/api/project"));
+}
+
+export async function updateProject(
+  variable_scope: "shared" | "isolated",
+): Promise<ProjectSettings> {
+  return json(
+    await fetch("/api/project", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variable_scope }),
+    }),
+  );
+}
+
 export async function debugStart(doc: FlowDoc): Promise<DebugState> {
   return json(
     await fetch("/api/debug/start", {

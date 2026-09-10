@@ -3,7 +3,7 @@ import type { SmithyFlowNode, ToolInfo, ToolSchemaProp } from "../types";
 import { COND_OPS, coerce } from "../types";
 import type { Condition } from "../types";
 import type { FlowFile } from "../api";
-import { KeyValueEditor, isIdentifier } from "./VariableRows";
+import { isIdentifier } from "./VariableRows";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -210,14 +210,12 @@ export default function Properties({
   tools,
   flows,
   onPatch,
-  onDelete,
   onOpenFlow,
 }: {
   node: SmithyFlowNode | null;
   tools: ToolInfo[];
   flows: FlowFile[];
   onPatch: (id: string, data: Record<string, unknown>) => void;
-  onDelete: (id: string) => void;
   onOpenFlow: (path: string) => void;
 }) {
   const patch = useCallback(
@@ -251,26 +249,8 @@ export default function Properties({
         Properties
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-3 text-foreground">
-        <div className="text-[10px] font-mono text-muted-foreground">id: {node.id}</div>
-
-        {d.kind !== "start" && d.kind !== "end" && (
-          <label className="block">
-            <FieldLabel>kind</FieldLabel>
-            <Input
-              className="h-7 text-xs"
-              value={d.kind}
-              readOnly
-              title="kind is fixed by node type"
-            />
-          </label>
-        )}
-
         {tool && (
           <>
-            <div className="flex items-center gap-2 border-t border-border pt-2 text-xs font-medium">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
-              <span className="break-all font-mono">{tool.name}</span>
-            </div>
             {selectorGroups.map((g) => (
               <label key={g.prefix} className="block" title={`${g.label} — XML-like, click to open editor`}>
                 <FieldLabel>{g.label}</FieldLabel>
@@ -344,7 +324,6 @@ export default function Properties({
 
         {d.kind === "if" && (
           <div className="border-t border-border pt-2">
-            <div className="mb-1.5 text-xs font-semibold">condition</div>
             <ConditionEditor
               condition={
                 d.condition ?? { var: "", op: "exists", value: "" } as unknown as Condition
@@ -356,7 +335,6 @@ export default function Properties({
 
         {d.kind === "loop" && (
           <div className="space-y-2 border-t border-border pt-2">
-            <div className="text-xs font-semibold">loop</div>
             <label className="block">
               <FieldLabel>mode</FieldLabel>
               <Select
@@ -425,7 +403,6 @@ export default function Properties({
         )}
         {d.kind === "set" && (
           <div className="space-y-2 border-t border-border pt-2">
-            <div className="text-xs font-semibold">set variable</div>
             <label className="block" title="plain identifier, no $ (a $ references a variable)">
               <FieldLabel>variable</FieldLabel>
               <Input
@@ -463,7 +440,6 @@ export default function Properties({
 
         {d.kind === "flow" && (
           <div className="space-y-2 border-t border-border pt-2">
-            <div className="text-xs font-semibold">subflow</div>
             <label className="block">
               <FieldLabel>path</FieldLabel>
               <Select
@@ -489,52 +465,15 @@ export default function Properties({
                 Open subflow
               </Button>
             )}
-            <label
-              className="block"
-              title="shared = same variables; isolated = only declared inputs/outputs"
-            >
-              <FieldLabel>scope</FieldLabel>
-              <Select
-                className="h-7 text-xs"
-                value={String(cfg.scope ?? "shared")}
-                onChange={(e) => patch(node.id, { config: { ...cfg, scope: e.target.value } })}
-              >
-                <option value="shared">shared</option>
-                <option value="isolated">isolated</option>
-              </Select>
-            </label>
-            <div className="border-t border-border pt-2">
-              <FieldLabel>inputs</FieldLabel>
-              <KeyValueEditor
-                key={`${node.id}-inputs`}
-                value={cfg.inputs as Record<string, string> | undefined}
-                onChange={(v) => patch(node.id, { config: { ...cfg, inputs: v } })}
-                namePlaceholder="var"
-                valuePlaceholder="value or $parent"
-              />
-            </div>
-            {cfg.scope === "isolated" && (
-              <div className="border-t border-border pt-2">
-                <FieldLabel>outputs</FieldLabel>
-                <KeyValueEditor
-                  key={`${node.id}-outputs`}
-                  value={cfg.outputs as Record<string, string> | undefined}
-                  onChange={(v) => patch(node.id, { config: { ...cfg, outputs: v } })}
-                  namePlaceholder="parent var"
-                  valuePlaceholder="child var"
-                />
-              </div>
-            )}
             <p className="text-[10px] leading-snug text-muted-foreground">
-              Working variables inside the subflow are edited on its own canvas
-              (open the subflow, then the Flow variables panel).
+              Inputs &amp; outputs: use the gear on the node. Variable scope is a
+              project setting (Project panel).
             </p>
           </div>
         )}
 
         {d.kind === "fail" && (
           <div className="space-y-2 border-t border-border pt-2">
-            <div className="text-xs font-semibold">fail</div>
             <label className="block" title="business = bad data, no retry; system = infra, retried">
               <FieldLabel>mode</FieldLabel>
               <Select
@@ -556,17 +495,6 @@ export default function Properties({
               />
             </label>
           </div>
-        )}
-
-        {d.kind !== "start" && (
-          <Button
-            variant="destructive"
-            size="sm"
-            className="w-full"
-            onClick={() => onDelete(node.id)}
-          >
-            Delete node
-          </Button>
         )}
       </div>
     </aside>

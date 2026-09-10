@@ -10,3 +10,7 @@ build/
 node_modules/
 designer-web/dist/
 *.flow.json
+
+# Coverage
+.coverage
+htmlcov/
