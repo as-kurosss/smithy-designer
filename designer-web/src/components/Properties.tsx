@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Crosshair } from "lucide-react";
 import SelectorField, { findSelectorGroups } from "./SelectorField";
 import type { SelectorGroup } from "./SelectorField";
 
@@ -211,12 +212,18 @@ export default function Properties({
   flows,
   onPatch,
   onOpenFlow,
+  onOpenVars,
+  onCaptureSelector,
+  embedded = false,
 }: {
   node: SmithyFlowNode | null;
   tools: ToolInfo[];
   flows: FlowFile[];
   onPatch: (id: string, data: Record<string, unknown>) => void;
   onOpenFlow: (path: string) => void;
+  onOpenVars?: () => void;
+  onCaptureSelector?: () => void;
+  embedded?: boolean;
 }) {
   const patch = useCallback(
     (id: string, data: Record<string, unknown>) => onPatch(id, data),
@@ -243,12 +250,20 @@ export default function Properties({
   const selectorGroups: SelectorGroup[] = findSelectorGroups(props);
   const selectorKeys = new Set(selectorGroups.flatMap((g) => g.keys));
 
-  return (
-    <aside className="panel-scroll flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border">
-      <div className="border-b border-border px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-        Properties
-      </div>
+  const body = (
       <div className="flex-1 space-y-3 overflow-y-auto p-3 text-foreground">
+        {onCaptureSelector && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            title="Capture a selector from the desktop: hover the element, press CTRL (ESC cancels)"
+            onClick={onCaptureSelector}
+          >
+            <Crosshair className="h-3.5 w-3.5" />
+            Record selector
+          </Button>
+        )}
         {tool && (
           <>
             {selectorGroups.map((g) => (
@@ -465,9 +480,14 @@ export default function Properties({
                 Open subflow
               </Button>
             )}
+            {onOpenVars && (
+              <Button variant="outline" size="sm" className="w-full" onClick={onOpenVars}>
+                Inputs &amp; outputs
+              </Button>
+            )}
             <p className="text-[10px] leading-snug text-muted-foreground">
-              Inputs &amp; outputs: use the gear on the node. Variable scope is a
-              project setting (Project panel).
+              Subflows always run isolated: they see global <span className="font-mono">G_…</span>{" "}
+              variables plus their inputs.
             </p>
           </div>
         )}
@@ -497,6 +517,16 @@ export default function Properties({
           </div>
         )}
       </div>
+  );
+
+  if (embedded) return <div className="min-h-0">{body}</div>;
+
+  return (
+    <aside className="panel-scroll flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border">
+      <div className="border-b border-border px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+        Properties
+      </div>
+      {body}
     </aside>
   );
 }

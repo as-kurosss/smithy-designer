@@ -2,15 +2,18 @@ import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export default function Modal({
   title,
   onClose,
   children,
+  panelClassName,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  panelClassName?: string;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -27,7 +30,12 @@ export default function Modal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-md rounded-xl bg-card p-4 shadow-xl ring-1 ring-border">
+      <div
+        className={cn(
+          "w-full rounded-xl bg-card p-4 shadow-xl ring-1 ring-border",
+          panelClassName ?? "max-w-md",
+        )}
+      >
         <div className="mb-3 flex items-center justify-between">
           <span className="text-sm font-semibold">{title}</span>
           <Button

@@ -222,9 +222,12 @@ function StadiumNode({
     <div
       onDoubleClick={() => startEdit(id)}
       className={`flex h-10 w-24 flex-col items-center justify-center gap-0 rounded-full border-2 bg-card px-2 shadow-md shadow-primary/20 ${
-        selected ? "ring-2 ring-ring" : ""
-      } ${data.current ? "animate-pulse" : ""}`}
-      style={{ borderColor: meta.stroke }}
+        data.current ? "animate-pulse" : ""
+      }`}
+      style={{
+        borderColor: meta.stroke,
+        ...(selected ? { boxShadow: `0 0 0 2px ${meta.stroke}` } : {}),
+      }}
     >
       {data.breakpoint && <BreakpointDot />}
       {editing ? (
@@ -275,6 +278,7 @@ function ParallelogramNode({
       className={`relative h-14 w-36 ${selected ? "drop-shadow-lg" : "drop-shadow-md"} ${data.current ? "animate-pulse" : ""}`}
     >
       {data.breakpoint && <BreakpointDot />}
+
       <svg viewBox="0 0 144 56" className="absolute inset-0 h-full w-full">
         <polygon
           points="3,3 141,3 141,53 3,53"

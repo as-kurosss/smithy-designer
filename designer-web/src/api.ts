@@ -118,14 +118,26 @@ export async function updateProject(
   );
 }
 
-export async function debugStart(doc: FlowDoc): Promise<DebugState> {
+export async function debugStart(doc: FlowDoc, devCapture = false): Promise<DebugState> {
+  const qs = devCapture ? "?dev_capture=true" : "";
   return json(
-    await fetch("/api/debug/start", {
+    await fetch(`/api/debug/start${qs}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(doc),
     }),
   );
+}
+
+export interface CapturedSelector {
+  selector: Record<string, unknown>;
+  full_path: unknown[];
+  confidence: string | null;
+  warnings: string[];
+}
+
+export async function captureSelector(): Promise<CapturedSelector> {
+  return json(await fetch("/api/capture/selector", { method: "POST" }));
 }
 
 export type DebugAction = "step" | "resume" | "pause" | "stop";

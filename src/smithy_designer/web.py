@@ -39,6 +39,8 @@ from fastapi.staticfiles import StaticFiles
 from smithy.core.registry import ToolRegistry
 from smithy.flow import validate_document
 
+from smithy_designer.capture import CaptureError
+from smithy_designer.capture import capture_selector as _capture_selector
 from smithy_designer.debugger import DebugError, FlowDebugger
 from smithy_designer.publish import publish as publish_flow
 from smithy_designer.record import RecordError, RecordSession
@@ -311,14 +313,24 @@ def create_app(flow_path: Path) -> FastAPI:
     async def record_state() -> dict[str, Any]:
         return recorder.state()
 
+    # -- selector capture --------------------------------------------------
+
+    @app.post("/api/capture/selector")
+    async def capture_selector_endpoint() -> dict[str, Any]:
+        """Interactively capture one selector (hover + CTRL; ESC cancels)."""
+        try:
+            return await asyncio.to_thread(_capture_selector)
+        except CaptureError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     # -- debugging ---------------------------------------------------------
 
     @app.post("/api/debug/start")
-    async def debug_start(request: Request) -> dict[str, Any]:
+    async def debug_start(request: Request, dev_capture: bool = False) -> dict[str, Any]:
         data = await _read_json(request)
         _validate_flow(data, registry)
         try:
-            return debugger.start(data)
+            return debugger.start(data, dev_capture=dev_capture)
         except DebugError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 

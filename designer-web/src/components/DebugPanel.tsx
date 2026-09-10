@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
-import { Pause, Play, Square, StepForward, TerminalSquare } from "lucide-react";
+import { TerminalSquare } from "lucide-react";
 import type { DebugState } from "../debugTypes";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -26,17 +25,9 @@ function levelColor(level: string): string {
 
 export default function DebugPanel({
   state,
-  onStep,
-  onResume,
-  onPause,
-  onStop,
   onEval,
 }: {
   state: DebugState | null;
-  onStep: () => void;
-  onResume: () => void;
-  onPause: () => void;
-  onStop: () => void;
   onEval: (expression: string) => void;
 }) {
   const [command, setCommand] = useState("");
@@ -48,10 +39,6 @@ export default function DebugPanel({
     const el = terminalRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [state?.log.length, state?.repl.length]);
-
-  const paused = state?.status === "paused" || state?.status === "error";
-  const running = state?.status === "running";
-  const active = state != null && state.status !== "idle" && state.status !== "finished";
 
   const stream = [
     ...(state?.log ?? []).map((e) => ({ ts: e.ts, kind: "log" as const, entry: e })),
@@ -94,9 +81,6 @@ export default function DebugPanel({
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border">
       <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-3 py-1.5">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-          Console
-        </span>
         {state ? (
           <Badge variant="outline" className={cn("gap-1.5 font-medium", STATUS_PILL[state.status])}>
             {PULSE_STATUS.has(state.status) && (
@@ -117,24 +101,6 @@ export default function DebugPanel({
             node <span className="font-mono text-foreground">{state.current_node}</span>
           </span>
         )}
-        <div className="ml-auto flex items-center gap-1">
-          <Button size="xs" onClick={onStep} disabled={!paused}>
-            <StepForward className="h-3 w-3" />
-            Step
-          </Button>
-          <Button size="xs" variant="outline" onClick={onResume} disabled={!paused}>
-            <Play className="h-3 w-3" />
-            Resume
-          </Button>
-          <Button size="xs" variant="outline" onClick={onPause} disabled={!running}>
-            <Pause className="h-3 w-3" />
-            Pause
-          </Button>
-          <Button size="xs" variant="destructive" onClick={onStop} disabled={!active}>
-            <Square className="h-3 w-3" />
-            Stop
-          </Button>
-        </div>
       </div>
 
       <div className="flex min-h-0 flex-1">

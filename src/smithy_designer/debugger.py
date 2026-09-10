@@ -224,7 +224,7 @@ class FlowDebugger:
 
     # ------------------------------------------------------------------ API
 
-    def start(self, doc: dict[str, Any]) -> dict[str, Any]:
+    def start(self, doc: dict[str, Any], *, dev_capture: bool = False) -> dict[str, Any]:
         if self._task is not None and not self._task.done():
             raise DebugError("a debug session is already active — stop it first")
         if doc.get("version") != FLOW_VERSION:
@@ -248,6 +248,7 @@ class FlowDebugger:
             variables=self._variables,
             edges=self._edges,
             log=self._log,
+            dev_capture=dev_capture,
         )
         self._task = asyncio.get_running_loop().create_task(self._run(doc))
         return self.state()
