@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
-import { ExternalLink, Upload, X } from "lucide-react";
+import { ExternalLink, Upload } from "lucide-react";
 import { publishFlow, type PublishResult } from "../api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import Modal from "@/components/ui/modal";
 
 const SETTINGS_KEY = "smithy.publish";
 
@@ -46,19 +47,13 @@ export default function PublishDialog({
 }) {
   const [settings, setSettings] = useState<PublishSettings>(() => {
     const loaded = loadSettings();
-    return loaded.name === defaults().name && defaultName ? { ...loaded, name: defaultName } : loaded;
+    return loaded.name === defaults().name && defaultName
+      ? { ...loaded, name: defaultName }
+      : loaded;
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<PublishResult | null>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const patch = (p: Partial<PublishSettings>) => setSettings((s) => ({ ...s, ...p }));
 
@@ -90,26 +85,8 @@ export default function PublishDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <form
-        onSubmit={submit}
-        className="w-full max-w-md rounded-xl bg-card p-4 shadow-xl ring-1 ring-foreground/10"
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <span className="flex items-center gap-2 text-sm font-semibold">
-            <Upload className="h-4 w-4 text-emerald-600" />
-            Publish to orchestrator
-          </span>
-          <Button variant="ghost" size="icon-sm" type="button" onClick={onClose} aria-label="Close">
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
+    <Modal title="Publish to orchestrator" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
         {result ? (
           <div className="space-y-3">
             <p className="text-sm">
@@ -138,7 +115,7 @@ export default function PublishDialog({
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
+          <>
             <label className="block space-y-1">
               <span className="text-xs font-medium text-muted-foreground">Orchestrator URL</span>
               <Input
@@ -185,7 +162,7 @@ export default function PublishDialog({
               Allow plain http to a non-loopback orchestrator (token in cleartext)
             </label>
 
-            {error && <p className="text-xs text-red-600">{error}</p>}
+            {error && <p className="text-xs text-tag-red-tx">{error}</p>}
 
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" size="sm" type="button" onClick={onClose}>
@@ -196,9 +173,9 @@ export default function PublishDialog({
                 {busy ? "Publishing…" : "Publish"}
               </Button>
             </div>
-          </div>
+          </>
         )}
       </form>
-    </div>
+    </Modal>
   );
 }

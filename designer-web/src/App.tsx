@@ -35,17 +35,22 @@ import Toolbox from "./components/Toolbox";
 import Properties from "./components/Properties";
 import DebugPanel from "./components/DebugPanel";
 import PublishDialog from "./components/PublishDialog";
+import ProjectTree from "./components/ProjectTree";
+import { flowVarsToRows, rowsToFlowVars, type VarRow } from "./components/VariableRows";
+import Resizer from "./components/Resizer";
+import VariablesPanel from "./components/VariablesPanel";
+import CreateSubflowModal from "./components/CreateSubflowModal";
 
 const nodeTypes = { smithy: SmithyNodeComponent };
 const edgeOptions = {
   type: "smoothstep",
-  markerEnd: { type: MarkerType.ArrowClosed, color: "#5b6f63" },
-  style: { stroke: "#5b6f63", strokeWidth: 2 },
+  markerEnd: { type: MarkerType.ArrowClosed, color: "#747a75" },
+  style: { stroke: "#747a75", strokeWidth: 2 },
 };
 const errorEdgeOptions = {
   type: "smoothstep",
-  markerEnd: { type: MarkerType.ArrowClosed, color: "#dc2626" },
-  style: { stroke: "#dc2626", strokeWidth: 2 },
+  markerEnd: { type: MarkerType.ArrowClosed, color: "#d44c47" },
+  style: { stroke: "#d44c47", strokeWidth: 2 },
 };
 
 function edgeOptionsFor(sourceHandle?: string | null) {
@@ -94,9 +99,12 @@ function toFlowEdge(e: FlowEdgeDto): SmithyFlowEdge {
 function toDoc(
   nodes: SmithyFlowNode[],
   edges: SmithyFlowEdge[],
+  variables: VarRow[] = [],
 ): FlowDoc {
+  const vars = rowsToFlowVars(variables);
   return {
     version: 2,
+    ...(vars.length > 0 ? { variables: vars } : {}),
     nodes: nodes.map((n) => {
       const d = n.data;
       const dto: FlowNodeDto = {
@@ -138,6 +146,13 @@ export default function App() {
   const rf = useReactFlow<SmithyFlowNode, SmithyFlowEdge>();
   const [flows, setFlows] = useState<FlowFile[]>([]);
   const [activePath, setActivePath] = useState("flow.json");
+  const [variableRows, setVariableRows] = useState<VarRow[]>(() => flowVarsToRows(undefined));
+  const [leftTab, setLeftTab] = useState<"project" | "tools">("tools");
+  const [leftWidth, setLeftWidth] = useState(240);
+  const [rightWidth, setRightWidth] = useState(320);
+  const [consoleHeight, setConsoleHeight] = useState(190);
+  const [variablesHeight, setVariablesHeight] = useState(180);
+  const [subflowModalOpen, setSubflowModalOpen] = useState(false);
 
   const loadFlow = useCallback(
     async (path: string) => {
@@ -148,6 +163,7 @@ export default function App() {
         if (!exists) {
           setNodes(starterDoc().nodes.map(toFlowNode));
           setEdges([]);
+          setVariableRows(flowVarsToRows(undefined));
           setStatus("new flow — drag tools onto the canvas");
         } else {
           const f = flow as Partial<FlowDoc> | null;
@@ -155,10 +171,12 @@ export default function App() {
             setLegacy(true);
             setNodes(starterDoc().nodes.map(toFlowNode));
             setEdges([]);
+            setVariableRows(flowVarsToRows(undefined));
             setStatus("file is v1 (recording) — opened an empty v2 flow");
           } else {
             setNodes((f.nodes ?? []).map(toFlowNode));
             setEdges((f.edges ?? []).map(toFlowEdge));
+            setVariableRows(flowVarsToRows(f.variables));
             setStatus("");
           }
         }
@@ -260,7 +278,7 @@ export default function App() {
 
   const save = useCallback(async (): Promise<boolean> => {
     if (loadFailed) return false;
-    const doc = toDoc(nodes, edges);
+    const doc = toDoc(nodes, edges, variableRows);
     const problems = validateFlow(doc.nodes, doc.edges);
     if (problems.length > 0) {
       setStatus(`validation: ${problems.join("; ")}`);
@@ -281,7 +299,7 @@ export default function App() {
       setStatus(`save failed: ${(e as Error).message}`);
       return false;
     }
-  }, [nodes, edges, legacy, loadFailed, activePath]);
+  }, [nodes, edges, legacy, loadFailed, activePath, variableRows]);
 
   const switchFlow = useCallback(
     async (path: string) => {
@@ -292,19 +310,20 @@ export default function App() {
     [activePath, dirty, save, loadFlow],
   );
 
-  const addSubflow = useCallback(async () => {
-    const name = window.prompt("Subflow name (saved under flows/)");
-    if (!name) return;
-    try {
-      const created = await createFlow(name);
-      setFlows(await fetchFlows());
-      if (dirty && !(await save())) return;
-      await loadFlow(created.path);
-      setStatus(`created ${created.path}`);
-    } catch (e) {
-      setStatus(`new subflow: ${(e as Error).message}`);
-    }
-  }, [dirty, save, loadFlow]);
+  const createSubflow = useCallback(
+    async (name: string) => {
+      try {
+        const created = await createFlow(name);
+        setFlows(await fetchFlows());
+        if (dirty && !(await save())) return;
+        await loadFlow(created.path);
+        setStatus(`created ${created.path}`);
+      } catch (e) {
+        setStatus(`new subflow: ${(e as Error).message}`);
+      }
+    },
+    [dirty, save, loadFlow],
+  );
 
   const openPublish = useCallback(async () => {
     if (dirty && !(await save())) return;
@@ -383,7 +402,7 @@ export default function App() {
   }, [currentNodeId, setNodes]);
 
   const startDebug = useCallback(async () => {
-    const doc = { ...toDoc(nodes, edges), breakpoints: [...breakpoints] };
+    const doc = { ...toDoc(nodes, edges, variableRows), breakpoints: [...breakpoints] };
     const problems = validateFlow(doc.nodes, doc.edges);
     if (problems.length > 0) {
       setStatus(`validation: ${problems.join("; ")}`);
@@ -400,7 +419,7 @@ export default function App() {
     } catch (e) {
       setStatus(`debug: ${(e as Error).message}`);
     }
-  }, [nodes, edges, breakpoints]);
+  }, [nodes, edges, breakpoints, variableRows]);
 
   const runDebugAction = useCallback(async (action: "step" | "resume" | "pause" | "stop") => {
     try {
@@ -417,11 +436,6 @@ export default function App() {
     } catch (e) {
       setStatus(`repl: ${(e as Error).message}`);
     }
-  }, []);
-
-  const closeDebug = useCallback(() => {
-    void debugAction("stop").catch(() => undefined);
-    setDebug(null);
   }, []);
 
   const startRecording = useCallback(async () => {
@@ -443,6 +457,7 @@ export default function App() {
       const { flow } = await recordStop();
       setNodes((flow.nodes ?? []).map(toFlowNode));
       setEdges((flow.edges ?? []).map(toFlowEdge));
+      setVariableRows(flowVarsToRows((flow as Partial<FlowDoc>).variables));
       setSelectedId(null);
       setDirty(true);
       const steps = Math.max(0, (flow.nodes?.length ?? 2) - 2);
@@ -502,172 +517,255 @@ export default function App() {
   }, [dirty, debug]);
 
   return (
-    <div className="flex h-full flex-col bg-gradient-to-b from-emerald-100/70 via-background to-background text-foreground">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-emerald-900/10 bg-background/80 px-4 backdrop-blur-md">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-700 text-white shadow-md shadow-emerald-600/30">
-          <Workflow className="h-5 w-5" />
+    <div className="flex h-full flex-col bg-background text-foreground">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur-md">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <Workflow className="h-4 w-4" />
         </span>
-        <span className="leading-tight">
-          <span className="block text-[15px] font-bold tracking-tight">
-            Smithy <span className="text-emerald-600">Designer</span>
-          </span>
-          <span className="block text-[11px] font-medium text-muted-foreground">
-            visual process editor
-          </span>
+        <span className="shrink-0 text-sm font-bold tracking-tight">
+          Smithy <span className="text-primary">Designer</span>
         </span>
-        <Badge
-          variant="outline"
-          className={cn(
-            "gap-1.5 font-medium",
-            legacy
-              ? "border-red-200 bg-red-100 text-red-800"
-              : dirty
-                ? "border-amber-200 bg-amber-100 text-amber-800"
-                : "border-emerald-200 bg-emerald-100 text-emerald-800",
-          )}
-        >
-          {(legacy || dirty) && (
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
-            </span>
-          )}
-          {legacy ? "v1 file loaded" : "flow v2"} · {dirty ? "unsaved" : "saved"}
-        </Badge>
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{status}</span>
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+          {flows.map((f) => (
+            <button
+              key={f.path}
+              type="button"
+              onClick={() => void switchFlow(f.path)}
+              title={f.path}
+              className={cn(
+                "max-w-[11rem] shrink-0 truncate rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
+                f.path === activePath
+                  ? "bg-primary text-primary-foreground shadow-sm shadow-primary/40"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {f.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setSubflowModalOpen(true)}
+            title="New subflow (saved under flows/)"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        {(legacy || dirty) && (
+          <Badge
+            variant="outline"
+            className={cn(
+              "shrink-0 gap-1.5 font-medium",
+              legacy
+                ? "border-tag-red-tx/30 bg-tag-red-bg text-tag-red-tx"
+                : "border-tag-yellow-tx/30 bg-tag-yellow-bg text-tag-yellow-tx",
+            )}
+          >
+            {legacy ? "v1" : "unsaved"}
+          </Badge>
+        )}
+        <span className="hidden max-w-[16rem] shrink-0 truncate text-xs text-muted-foreground xl:block">
+          {status}
+        </span>
         {!debugActive && (
-          <Button variant="secondary" size="sm" disabled={loadFailed} onClick={() => void startDebug()}>
+          <Button
+            variant="secondary"
+            size="icon-sm"
+            title="Debug on the real desktop"
+            disabled={loadFailed}
+            onClick={() => void startDebug()}
+          >
             <Play className="h-4 w-4" />
-            Debug
           </Button>
         )}
         {record !== null ? (
-          <Button variant="destructive" size="sm" onClick={() => void stopRecording()}>
+          <Button
+            variant="destructive"
+            size="icon-sm"
+            title="Stop recording"
+            onClick={() => void stopRecording()}
+          >
             <Square className="h-4 w-4" />
-            Stop ({record.steps})
           </Button>
         ) : (
           <Button
             variant="outline"
-            size="sm"
+            size="icon-sm"
+            title="Record desktop actions"
             disabled={loadFailed || debugActive}
             onClick={() => void startRecording()}
           >
-            <Circle className="h-4 w-4 text-red-500" />
-            Record
+            <Circle className="h-4 w-4 text-tag-red-tx" />
           </Button>
         )}
         <Button
           variant="outline"
-          size="sm"
+          size="icon-sm"
+          title="Publish to orchestrator"
           disabled={loadFailed}
           onClick={() => void openPublish()}
         >
           <Upload className="h-4 w-4" />
-          Publish
         </Button>
-        <Button variant="outline" size="sm" onClick={newFlow}>
+        <Button variant="outline" size="icon-sm" title="Clear canvas" onClick={newFlow}>
           <Plus className="h-4 w-4" />
-          New
         </Button>
-        <Button size="sm" disabled={loadFailed} title="Ctrl+S" onClick={() => void save()}>
+        <Button
+          size="icon-sm"
+          title="Save (Ctrl+S)"
+          disabled={loadFailed}
+          onClick={() => void save()}
+        >
           <Save className="h-4 w-4" />
-          Save
         </Button>
       </header>
-      <div className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b border-emerald-900/10 bg-background/60 px-3">
-        {flows.map((f) => (
-          <button
-            key={f.path}
-            type="button"
-            onClick={() => void switchFlow(f.path)}
-            title={f.path}
-            className={cn(
-              "shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
-              f.path === activePath
-                ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/40"
-                : "text-muted-foreground hover:bg-emerald-600/10 hover:text-emerald-900",
+
+      <div className="flex min-h-0 flex-1">
+        <div style={{ width: leftWidth }} className="flex min-h-0 shrink-0 flex-col gap-2 p-2">
+          <div className="flex shrink-0 gap-1 rounded-lg bg-muted p-0.5">
+            {(["project", "tools"] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setLeftTab(tab)}
+                className={cn(
+                  "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                  leftTab === tab
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {tab === "project" ? "Project" : "Tools"}
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1">
+            {leftTab === "project" ? (
+              <ProjectTree
+                flows={flows}
+                activePath={activePath}
+                onOpen={(path) => void switchFlow(path)}
+                onCreate={() => setSubflowModalOpen(true)}
+              />
+            ) : (
+              <Toolbox tools={tools} />
             )}
+          </div>
+        </div>
+
+        <Resizer
+          orientation="vertical"
+          onDelta={(d) => setLeftWidth((w) => Math.max(180, Math.min(460, w + d)))}
+        />
+
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col p-2">
+          <div
+            className="min-h-0 flex-1 overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border"
+            onDrop={onDrop}
+            onDragOver={onDragOver}
           >
-            {f.name}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => void addSubflow()}
-          title="New subflow (saved under flows/)"
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-emerald-600/10 hover:text-emerald-900"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <div className="flex min-h-0 flex-1 gap-2 p-3">
-        <Toolbox tools={tools} />
-        <div className="min-w-0 flex-1 overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/10" onDrop={onDrop} onDragOver={onDragOver}>
-        <NodeEditContext.Provider value={nodeEditContext}>
-          <ReactFlow<SmithyFlowNode, SmithyFlowEdge>
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            nodeTypes={nodeTypes}
-            defaultEdgeOptions={edgeOptions}
-            onNodeClick={(_, n) => setSelectedId(n.id)}
-            onNodeDoubleClick={(_, n) => {
-              if (n.data.kind === "flow") {
-                const p = (n.data.config as Record<string, unknown> | undefined)?.path;
-                if (typeof p === "string" && p) void switchFlow(p);
-              }
-            }}
-            onNodeContextMenu={(e, n) => {
-              e.preventDefault();
-              toggleBreakpoint(n.id);
-            }}
-            onPaneClick={() => {
-              setSelectedId(null);
-              setEditingId(null);
-            }}
-            onNodesDelete={() => setDirty(true)}
-            onEdgesDelete={() => setDirty(true)}
-            onNodeDragStop={() => setDirty(true)}
-            deleteKeyCode={["Delete", "Backspace"]}
-            colorMode="light"
-            fitView
+            <NodeEditContext.Provider value={nodeEditContext}>
+              <ReactFlow<SmithyFlowNode, SmithyFlowEdge>
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                nodeTypes={nodeTypes}
+                defaultEdgeOptions={edgeOptions}
+                onNodeClick={(_, n) => setSelectedId(n.id)}
+                onNodeDoubleClick={(_, n) => {
+                  if (n.data.kind === "flow") {
+                    const p = (n.data.config as Record<string, unknown> | undefined)?.path;
+                    if (typeof p === "string" && p) void switchFlow(p);
+                  }
+                }}
+                onNodeContextMenu={(e, n) => {
+                  e.preventDefault();
+                  toggleBreakpoint(n.id);
+                }}
+                onPaneClick={() => {
+                  setSelectedId(null);
+                  setEditingId(null);
+                }}
+                onNodesDelete={() => setDirty(true)}
+                onEdgesDelete={() => setDirty(true)}
+                onNodeDragStop={() => setDirty(true)}
+                deleteKeyCode={["Delete", "Backspace"]}
+                colorMode="light"
+                proOptions={{ hideAttribution: true }}
+                fitView
+              >
+                <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#c9d6cc" />
+                <Controls />
+                <MiniMap
+                  pannable
+                  zoomable
+                  maskColor="rgba(244, 247, 244, 0.8)"
+                  nodeColor="#2e7d4f"
+                />
+              </ReactFlow>
+            </NodeEditContext.Provider>
+          </div>
+
+          <Resizer
+            orientation="horizontal"
+            onDelta={(d) => setConsoleHeight((h) => Math.max(0, Math.min(600, h - d)))}
+          />
+          <div
+            style={{ height: consoleHeight }}
+            className="min-h-0 shrink-0 overflow-hidden"
+            hidden={consoleHeight <= 2}
           >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#c2d2c8" />
-            <Controls />
-            <MiniMap
-              pannable
-              zoomable
-              maskColor="rgba(242, 247, 243, 0.8)"
-              nodeColor="#059669"
+            <DebugPanel
+              state={debug}
+              onStep={() => void runDebugAction("step")}
+              onResume={() => void runDebugAction("resume")}
+              onPause={() => void runDebugAction("pause")}
+              onStop={() => void runDebugAction("stop")}
+              onEval={(expr) => void evalExpression(expr)}
             />
-          </ReactFlow>
-        </NodeEditContext.Provider>
-      </div>
-        <Properties
-          node={selectedNode}
-          tools={tools}
-          flows={flows}
-          onPatch={patchNode}
-          onDelete={deleteNode}
-          onOpenFlow={(path) => void switchFlow(path)}
+          </div>
+        </div>
+
+        <Resizer
+          orientation="vertical"
+          onDelta={(d) => setRightWidth((w) => Math.max(240, Math.min(560, w - d)))}
         />
+
+        <div style={{ width: rightWidth }} className="flex min-h-0 shrink-0 flex-col gap-2 p-2">
+          <div className="min-h-0 flex-1">
+            <Properties
+              node={selectedNode}
+              tools={tools}
+              flows={flows}
+              onPatch={patchNode}
+              onDelete={deleteNode}
+              onOpenFlow={(path) => void switchFlow(path)}
+            />
+          </div>
+          <Resizer
+            orientation="horizontal"
+            onDelta={(d) => setVariablesHeight((h) => Math.max(0, Math.min(500, h - d)))}
+          />
+          <div
+            style={{ height: variablesHeight }}
+            className="min-h-0 shrink-0 overflow-hidden"
+            hidden={variablesHeight <= 2}
+          >
+            <VariablesPanel rows={variableRows} onChange={setVariableRows} path={activePath} />
+          </div>
+        </div>
       </div>
-      {debug !== null && (
-        <DebugPanel
-          state={debug}
-          onStep={() => void runDebugAction("step")}
-          onResume={() => void runDebugAction("resume")}
-          onPause={() => void runDebugAction("pause")}
-          onStop={() => void runDebugAction("stop")}
-          onClose={closeDebug}
-          onEval={(expr) => void evalExpression(expr)}
-        />
-      )}
+
       {publishOpen && (
         <PublishDialog defaultName="my-flow" onClose={() => setPublishOpen(false)} />
+      )}
+      {subflowModalOpen && (
+        <CreateSubflowModal
+          onCreate={(name) => void createSubflow(name)}
+          onClose={() => setSubflowModalOpen(false)}
+        />
       )}
     </div>
   );

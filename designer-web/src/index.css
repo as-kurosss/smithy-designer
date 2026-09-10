@@ -1,25 +1,48 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #f2f7f3;
-  --color-foreground: #1a2e22;
+  /* Canvas and ink — notion.so paper, green cast (same tokens as smithy-cloud) */
+  --color-background: #f4f7f4;
+  --color-foreground: #111111;
   --color-card: #ffffff;
-  --color-card-foreground: #1a2e22;
+  --color-card-foreground: #111111;
   --color-popover: #ffffff;
-  --color-popover-foreground: #1a2e22;
-  --color-primary: #059669;
+  --color-popover-foreground: #111111;
+
+  /* Single primary action — green */
+  --color-primary: #2e7d4f;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #dcf0e4;
-  --color-secondary-foreground: #064e3b;
-  --color-muted: #e7eeea;
-  --color-muted-foreground: #5b6f63;
-  --color-accent: #d3e9dc;
-  --color-accent-foreground: #064e3b;
-  --color-destructive: #dc2626;
+  --color-secondary: #e7f3ec;
+  --color-secondary-foreground: #448361;
+
+  --color-muted: #eef1ee;
+  --color-muted-foreground: #747a75;
+  --color-accent: #d9ecd2;
+  --color-accent-foreground: #0d211a;
+
+  --color-destructive: #d44c47;
   --color-destructive-foreground: #ffffff;
-  --color-border: #d9e5dc;
-  --color-input: #c2d2c8;
-  --color-ring: #10b981;
+
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-input: rgba(0, 0, 0, 0.15);
+  --color-ring: #2e7d4f;
+
+  /* Dark island + select-tag language */
+  --color-spruce: #0d211a;
+  --color-tag-gray-bg: #eef1ee;
+  --color-tag-gray-tx: #6d746f;
+  --color-tag-yellow-bg: #fbf3db;
+  --color-tag-yellow-tx: #cb912f;
+  --color-tag-green-bg: #edf3ec;
+  --color-tag-green-tx: #448361;
+  --color-tag-blue-bg: #e7f3f8;
+  --color-tag-blue-tx: #337ea9;
+  --color-tag-red-bg: #fdebec;
+  --color-tag-red-tx: #d44c47;
+
+  /* Editorial serif for page leads */
+  --font-sans: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Source Serif 4", Georgia, serif;
 
   --animate-enter: enter 0.45s ease-out both;
 
@@ -49,11 +72,11 @@
     @apply bg-background text-foreground antialiased;
   }
   ::selection {
-    background-color: #a7f3d0;
+    background-color: #c8e6d0;
   }
 }
 
-/* Slim green scrollbar for panel lists and the debug terminal */
+/* Slim scrollbar for panel lists and the debug terminal */
 .panel-scroll::-webkit-scrollbar,
 .terminal-scroll::-webkit-scrollbar {
   width: 8px;
@@ -63,9 +86,12 @@
 .terminal-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
-.panel-scroll::-webkit-scrollbar-thumb,
+.panel-scroll::-webkit-scrollbar-thumb {
+  background: rgba(46, 125, 79, 0.35);
+  border-radius: 999px;
+}
 .terminal-scroll::-webkit-scrollbar-thumb {
-  background: #065f46;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 999px;
 }
 
@@ -73,26 +99,26 @@
 .react-flow__controls {
   overflow: hidden;
   border-radius: 12px;
-  border: 1px solid rgb(6 78 59 / 0.1);
+  border: 1px solid rgb(0 0 0 / 0.08);
   background: rgb(255 255 255 / 0.9);
-  box-shadow: 0 1px 2px rgb(6 78 59 / 0.08);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
   backdrop-filter: blur(8px);
 }
 .react-flow__controls-button {
-  border-bottom: 1px solid rgb(6 78 59 / 0.1);
+  border-bottom: 1px solid rgb(0 0 0 / 0.08);
   background: transparent;
 }
 .react-flow__controls-button:last-child {
   border-bottom: 0;
 }
 .react-flow__controls-button:hover {
-  background: rgb(5 150 105 / 0.1);
+  background: rgb(46 125 79 / 0.1);
 }
 .react-flow__controls-button svg {
-  fill: #5b6f63;
+  fill: #747a75;
 }
 .react-flow__controls-button:hover svg {
-  fill: #064e3b;
+  fill: #2e7d4f;
 }
 .react-flow__minimap {
   overflow: hidden;
@@ -101,7 +127,7 @@
 }
 .react-flow__attribution {
   background: transparent;
-  color: rgb(91 111 99 / 0.6);
+  color: rgb(116 122 117 / 0.6);
 }
 .react-flow__node {
   outline: none;
@@ -110,10 +136,10 @@
   outline: none;
 }
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #059669;
+  stroke: #2e7d4f;
 }
 .react-flow__connection-path {
-  stroke: #059669;
+  stroke: #2e7d4f;
 }
 .react-flow__handle {
   transition: transform 0.12s ease-out, background-color 0.12s ease-out;

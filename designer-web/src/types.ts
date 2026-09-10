@@ -61,8 +61,15 @@ export interface FlowEdgeDto {
   target: string;
 }
 
+export interface FlowVariable {
+  name: string;
+  type?: string;
+  value: string;
+}
+
 export interface FlowDoc {
   version: 2;
+  variables?: Record<string, string> | FlowVariable[];
   nodes: FlowNodeDto[];
   edges: FlowEdgeDto[];
   breakpoints?: string[];

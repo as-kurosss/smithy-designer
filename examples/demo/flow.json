@@ -1,0 +1,138 @@
+{
+  "version": 2,
+  "variables": {
+    "username": "demo-user",
+    "notepad_title": "Notepad"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "kind": "start",
+      "config": {},
+      "position": [
+        40,
+        200
+      ]
+    },
+    {
+      "id": "launch",
+      "kind": "tool",
+      "config": {
+        "action": "start",
+        "command": "notepad.exe"
+      },
+      "position": [
+        240,
+        200
+      ],
+      "tool": "windows.process",
+      "label": "Launch Notepad",
+      "save_as": "app"
+    },
+    {
+      "id": "login",
+      "kind": "flow",
+      "config": {
+        "path": "flows/login.flow.json",
+        "scope": "isolated",
+        "inputs": {
+          "user": "$username"
+        }
+      },
+      "position": [
+        520,
+        200
+      ],
+      "label": "Login subflow"
+    },
+    {
+      "id": "stop",
+      "kind": "tool",
+      "config": {
+        "action": "stop",
+        "pid": "$app.pid"
+      },
+      "position": [
+        800,
+        200
+      ],
+      "tool": "windows.process",
+      "label": "Close Notepad"
+    },
+    {
+      "id": "fail",
+      "kind": "fail",
+      "config": {
+        "mode": "system",
+        "message": "login subflow failed"
+      },
+      "position": [
+        520,
+        420
+      ]
+    },
+    {
+      "id": "end",
+      "kind": "end",
+      "config": {},
+      "position": [
+        1060,
+        200
+      ]
+    },
+    {
+      "id": "ffdd3moe",
+      "kind": "tool",
+      "config": {
+        "action": "write"
+      },
+      "position": [
+        192,
+        455
+      ],
+      "tool": "excel"
+    },
+    {
+      "id": "aciq813e",
+      "kind": "tool",
+      "config": {},
+      "position": [
+        121,
+        350
+      ],
+      "tool": "excel"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "start",
+      "source_handle": "out",
+      "target": "launch"
+    },
+    {
+      "id": "e2",
+      "source": "launch",
+      "source_handle": "out",
+      "target": "login"
+    },
+    {
+      "id": "e3",
+      "source": "login",
+      "source_handle": "out",
+      "target": "stop"
+    },
+    {
+      "id": "e4",
+      "source": "login",
+      "source_handle": "error",
+      "target": "fail"
+    },
+    {
+      "id": "e5",
+      "source": "stop",
+      "source_handle": "out",
+      "target": "end"
+    }
+  ]
+}

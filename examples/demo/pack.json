@@ -1,0 +1,18 @@
+{
+  "schema": "smithy-pack-v1",
+  "name": "my-flow-test",
+  "version": "1.0.1789049751",
+  "entry": {
+    "process": "flow.json"
+  },
+  "files": [
+    {
+      "path": "flow.json",
+      "sha256": "74721bad20d80951567cd74fa7dc4115c04731ebad35f3dc41d38701b9299471"
+    },
+    {
+      "path": "flows/login.flow.json",
+      "sha256": "b3eaa893ca3177d1c3dd6f000be0c6e3d38d90a819ad3b3e7a66cc629364d8de"
+    }
+  ]
+}

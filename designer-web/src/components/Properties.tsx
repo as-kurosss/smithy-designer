@@ -1,60 +1,161 @@
-import { useCallback } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { useCallback, useState } from "react";
 import type { SmithyFlowNode, ToolInfo, ToolSchemaProp } from "../types";
 import { COND_OPS, coerce } from "../types";
 import type { Condition } from "../types";
 import type { FlowFile } from "../api";
+import { KeyValueEditor, isIdentifier } from "./VariableRows";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import SelectorField, { findSelectorGroups } from "./SelectorField";
 import type { SelectorGroup } from "./SelectorField";
 
-function inputType(prop: ToolSchemaProp): "text" | "checkbox" | "textarea" {
-  if (prop.enum) return "text";
-  if (prop.type === "boolean") return "checkbox";
-  if (prop.type === "array" || prop.type === "object") return "textarea";
-  // integers/numbers use a text input too: a plain number or a $var reference
-  return "text";
+function isRef(value: unknown): boolean {
+  return typeof value === "string" && /\$[\w{]/.test(value);
 }
 
-/** JSON when parseable; array fields also accept one item per line. */
-function parseTextareaValue(raw: string, def: ToolSchemaProp): unknown {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    if (def.type === "array" && !raw.trim().startsWith("[")) {
-      return raw
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line !== "");
-    }
-    return raw; // keep raw while typing
+function isQuoted(text: string): boolean {
+  if (text.length < 2) return false;
+  const first = text[0];
+  const last = text[text.length - 1];
+  return (first === '"' && last === '"') || (first === "'" && last === "'");
+}
+
+/** Initial editor text: strings are shown quoted (Python-like). */
+function initialText(def: ToolSchemaProp, value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (def.type === "array" || def.type === "object") {
+    return typeof value === "string" ? value : JSON.stringify(value, null, 2);
   }
+  const text = String(value);
+  if (def.type === "string" && text !== "" && !isRef(text)) {
+    return `"${text}"`;
+  }
+  return text;
+}
+
+/**
+ * A schema-typed config input.
+ *
+ * Strings are edited Python-style — wrapped in quotes (``"text"`` or
+ * ``'text'``) — or as a ``$ref``; a bare literal in a string field is
+ * flagged. Numbers/JSON are validated and flagged on mismatch.
+ */
+function SchemaInput({
+  def,
+  value,
+  onChange,
+}: {
+  def: ToolSchemaProp;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}) {
+  const [text, setText] = useState(() => initialText(def, value));
+  const type = def.type;
+
+  if (type === "boolean") {
+    return (
+      <input
+        type="checkbox"
+        checked={Boolean(value)}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+    );
+  }
+
+  if (type === "array" || type === "object") {
+    let error: string | null = null;
+    if (text.trim() !== "" && !isRef(text)) {
+      try {
+        JSON.parse(text);
+      } catch {
+        error = `invalid JSON ${type}`;
+      }
+    }
+    return (
+      <>
+        <Textarea
+          className={cn(
+            "h-20 min-h-0 font-mono text-xs",
+            error && "border-destructive ring-1 ring-destructive/40",
+          )}
+          value={text}
+          onChange={(e) => {
+            const raw = e.target.value;
+            setText(raw);
+            try {
+              onChange(JSON.parse(raw));
+            } catch {
+              onChange(raw);
+            }
+          }}
+        />
+        {error && <span className="mt-0.5 block text-[10px] text-tag-red-tx">{error}</span>}
+      </>
+    );
+  }
+
+  if (type === "integer" || type === "number") {
+    const error =
+      text !== "" && !isRef(text) && Number.isNaN(Number(text))
+        ? `expected a ${type} (or $var)`
+        : null;
+    return (
+      <>
+        <Input
+          className="h-7 font-mono text-xs"
+          aria-invalid={error ? true : undefined}
+          value={text}
+          onChange={(e) => {
+            const raw = e.target.value;
+            setText(raw);
+            if (raw === "" || isRef(raw)) {
+              onChange(raw);
+              return;
+            }
+            const num = Number(raw);
+            onChange(Number.isNaN(num) ? raw : num);
+          }}
+        />
+        {error && <span className="mt-0.5 block text-[10px] text-tag-red-tx">{error}</span>}
+      </>
+    );
+  }
+
+  // string
+  const error =
+    text !== "" && !isRef(text) && !isQuoted(text)
+      ? 'wrap the string in quotes ("..." or \'...\')'
+      : null;
+  return (
+    <>
+      <Input
+        className="h-7 font-mono text-xs"
+        aria-invalid={error ? true : undefined}
+        value={text}
+        onChange={(e) => {
+          const raw = e.target.value;
+          setText(raw);
+          if (isRef(raw)) {
+            onChange(raw);
+          } else if (isQuoted(raw)) {
+            onChange(raw.slice(1, -1));
+          } else {
+            onChange(raw);
+          }
+        }}
+      />
+      {error && <span className="mt-0.5 block text-[10px] text-tag-red-tx">{error}</span>}
+    </>
+  );
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <span className="mb-1 block text-xs font-medium">{children}</span>
   );
-}
-
-/** Parse JSON when possible; otherwise keep the raw string (engine validates). */
-function parseJsonOrRaw(raw: string): unknown {
-  const trimmed = raw.trim();
-  if (trimmed === "") return undefined;
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return raw;
-  }
-}
-
-function jsonText(value: unknown): string {
-  if (value === undefined || value === null) return "";
-  if (typeof value === "string") return value;
-  return JSON.stringify(value, null, 2);
 }
 
 function ConditionEditor({
@@ -126,15 +227,12 @@ export default function Properties({
 
   if (!node) {
     return (
-      <aside className="panel-scroll w-60 shrink-0 overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/10">
-        <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-            <SlidersHorizontal className="h-5 w-5" />
-          </span>
-          <p className="text-sm font-medium">No node selected</p>
-          <p className="text-xs text-muted-foreground">
-            Select a node to edit its properties.
-          </p>
+      <aside className="panel-scroll flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border">
+        <div className="border-b border-border px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+          Properties
+        </div>
+        <div className="flex flex-1 items-center justify-center p-4 text-center text-xs text-muted-foreground">
+          Select a node to edit its properties.
         </div>
       </aside>
     );
@@ -148,8 +246,8 @@ export default function Properties({
   const selectorKeys = new Set(selectorGroups.flatMap((g) => g.keys));
 
   return (
-    <aside className="panel-scroll flex w-60 shrink-0 flex-col overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-foreground/10">
-      <div className="border-b border-emerald-900/10 px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+    <aside className="panel-scroll flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border">
+      <div className="border-b border-border px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
         Properties
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-3 text-foreground">
@@ -169,8 +267,8 @@ export default function Properties({
 
         {tool && (
           <>
-            <div className="flex items-center gap-2 border-t border-emerald-900/10 pt-2 text-xs font-medium">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+            <div className="flex items-center gap-2 border-t border-border pt-2 text-xs font-medium">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
               <span className="break-all font-mono">{tool.name}</span>
             </div>
             {selectorGroups.map((g) => (
@@ -194,87 +292,46 @@ export default function Properties({
             {Object.entries(props)
               .filter(([key]) => !selectorKeys.has(key))
               .map(([key, def]) => {
-              const kind = inputType(def);
-              const value = (d.config as Record<string, unknown>)[key] ?? def.default ?? "";
-              return (
-                <label key={key} className="block" title={def.description}>
-                  <FieldLabel>
-                    {key}
-                    {def.enum && (
-                      <span className="ml-1 normal-case text-muted-foreground/70">
-                        ({def.enum.join(", ")})
+                const value = (d.config as Record<string, unknown>)[key];
+                const set = (next: unknown) =>
+                  patch(node.id, { config: { ...d.config, [key]: next } });
+                const typeLabel = def.enum ? def.enum.join(" | ") : def.type ?? "string";
+                return (
+                  <label key={key} className="block" title={def.description}>
+                    <FieldLabel>
+                      {key}
+                      <span className="ml-1 font-mono text-[10px] font-normal normal-case text-muted-foreground/80">
+                        {typeLabel}
                       </span>
+                    </FieldLabel>
+                    {def.enum ? (
+                      <Select
+                        className="h-7 text-xs"
+                        value={String(value ?? def.default ?? "")}
+                        onChange={(e) => set(e.target.value)}
+                      >
+                        {def.enum.map((opt) => (
+                          <option key={String(opt)} value={String(opt)}>
+                            {String(opt)}
+                          </option>
+                        ))}
+                      </Select>
+                    ) : (
+                      <SchemaInput
+                        key={`${node.id}:${key}`}
+                        def={def}
+                        value={value ?? def.default}
+                        onChange={set}
+                      />
                     )}
-                    {(def.type === "integer" || def.type === "number") && (
-                      <span className="ml-1 normal-case text-muted-foreground/70">
-                        · number or $var
-                      </span>
-                    )}
-                    {def.type === "array" && (
-                      <span className="ml-1 normal-case text-muted-foreground/70">
-                        · one per line or JSON
-                      </span>
-                    )}
-                  </FieldLabel>
-                  {def.enum ? (
-                    <Select
-                      className="h-7 text-xs"
-                      value={String(value)}
-                      onChange={(e) =>
-                        patch(node.id, {
-                          config: { ...d.config, [key]: coerce(e.target.value) },
-                        })
-                      }
-                    >
-                      {def.enum.map((opt) => (
-                        <option key={String(opt)} value={String(opt)}>
-                          {String(opt)}
-                        </option>
-                      ))}
-                    </Select>
-                  ) : kind === "checkbox" ? (
-                    <input
-                      type="checkbox"
-                      checked={Boolean(value)}
-                      onChange={(e) =>
-                        patch(node.id, {
-                          config: { ...d.config, [key]: e.target.checked },
-                        })
-                      }
-                    />
-                  ) : kind === "textarea" ? (
-                    <Textarea
-                      className="h-20 min-h-0 font-mono text-xs"
-                      value={typeof value === "string" ? value : JSON.stringify(value)}
-                      onChange={(e) =>
-                        patch(node.id, {
-                          config: {
-                            ...d.config,
-                            [key]: parseTextareaValue(e.target.value, def),
-                          },
-                        })
-                      }
-                    />
-                  ) : (
-                    <Input
-                      className="h-7 text-xs"
-                      type="text"
-                      value={String(value)}
-                      onChange={(e) =>
-                        patch(node.id, {
-                          config: { ...d.config, [key]: coerce(e.target.value) },
-                        })
-                      }
-                    />
-                  )}
-                </label>
-              );
-            })}
+                  </label>
+                );
+              })}
           </>
         )}
 
         {d.kind === "tool" && (
-          <label className="block border-t border-emerald-900/10 pt-2">
+          <label className="block border-t border-border pt-2">
             <FieldLabel>save_as</FieldLabel>
             <Input
               className="h-7 text-xs"
@@ -286,7 +343,7 @@ export default function Properties({
         )}
 
         {d.kind === "if" && (
-          <div className="border-t border-emerald-900/10 pt-2">
+          <div className="border-t border-border pt-2">
             <div className="mb-1.5 text-xs font-semibold">condition</div>
             <ConditionEditor
               condition={
@@ -298,7 +355,7 @@ export default function Properties({
         )}
 
         {d.kind === "loop" && (
-          <div className="space-y-2 border-t border-emerald-900/10 pt-2">
+          <div className="space-y-2 border-t border-border pt-2">
             <div className="text-xs font-semibold">loop</div>
             <label className="block">
               <FieldLabel>mode</FieldLabel>
@@ -367,34 +424,28 @@ export default function Properties({
           </div>
         )}
         {d.kind === "set" && (
-          <div className="space-y-2 border-t border-emerald-900/10 pt-2">
+          <div className="space-y-2 border-t border-border pt-2">
             <div className="text-xs font-semibold">set variable</div>
-            <label className="block">
-              <FieldLabel>name</FieldLabel>
+            <label className="block" title="plain identifier, no $ (a $ references a variable)">
+              <FieldLabel>variable</FieldLabel>
               <Input
                 className="h-7 font-mono text-xs"
+                aria-invalid={
+                  String(cfg.var ?? "") !== "" && !isIdentifier(String(cfg.var))
+                    ? true
+                    : undefined
+                }
                 value={String(cfg.var ?? "")}
                 placeholder="items"
                 onChange={(e) =>
-                  patch(node.id, { config: { ...cfg, var: e.target.value } })
+                  patch(node.id, { config: { ...cfg, var: e.target.value, type: "auto" } })
                 }
               />
-            </label>
-            <label className="block" title="auto detects numbers/bools/json; others force the type">
-              <FieldLabel>type</FieldLabel>
-              <Select
-                className="h-7 text-xs"
-                value={String(cfg.type ?? "auto")}
-                onChange={(e) =>
-                  patch(node.id, { config: { ...cfg, type: e.target.value } })
-                }
-              >
-                {["auto", "string", "number", "bool", "json"].map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </Select>
+              {String(cfg.var ?? "") !== "" && !isIdentifier(String(cfg.var)) && (
+                <span className="mt-0.5 block text-[10px] text-tag-red-tx">
+                  use a plain name like items (no $)
+                </span>
+              )}
             </label>
             <label className="block">
               <FieldLabel>value</FieldLabel>
@@ -411,7 +462,7 @@ export default function Properties({
         )}
 
         {d.kind === "flow" && (
-          <div className="space-y-2 border-t border-emerald-900/10 pt-2">
+          <div className="space-y-2 border-t border-border pt-2">
             <div className="text-xs font-semibold">subflow</div>
             <label className="block">
               <FieldLabel>path</FieldLabel>
@@ -452,37 +503,37 @@ export default function Properties({
                 <option value="isolated">isolated</option>
               </Select>
             </label>
-            <label className="block">
-              <FieldLabel>inputs (JSON)</FieldLabel>
-              <Textarea
-                className="h-16 min-h-0 font-mono text-xs"
-                value={jsonText(cfg.inputs)}
-                placeholder='{ "user": "$username" }'
-                onChange={(e) =>
-                  patch(node.id, { config: { ...cfg, inputs: parseJsonOrRaw(e.target.value) } })
-                }
+            <div className="border-t border-border pt-2">
+              <FieldLabel>inputs</FieldLabel>
+              <KeyValueEditor
+                key={`${node.id}-inputs`}
+                value={cfg.inputs as Record<string, string> | undefined}
+                onChange={(v) => patch(node.id, { config: { ...cfg, inputs: v } })}
+                namePlaceholder="var"
+                valuePlaceholder="value or $parent"
               />
-            </label>
+            </div>
             {cfg.scope === "isolated" && (
-              <label className="block">
-                <FieldLabel>outputs (JSON)</FieldLabel>
-                <Textarea
-                  className="h-16 min-h-0 font-mono text-xs"
-                  value={jsonText(cfg.outputs)}
-                  placeholder='{ "session": "token" } or ["result"]'
-                  onChange={(e) =>
-                    patch(node.id, {
-                      config: { ...cfg, outputs: parseJsonOrRaw(e.target.value) },
-                    })
-                  }
+              <div className="border-t border-border pt-2">
+                <FieldLabel>outputs</FieldLabel>
+                <KeyValueEditor
+                  key={`${node.id}-outputs`}
+                  value={cfg.outputs as Record<string, string> | undefined}
+                  onChange={(v) => patch(node.id, { config: { ...cfg, outputs: v } })}
+                  namePlaceholder="parent var"
+                  valuePlaceholder="child var"
                 />
-              </label>
+              </div>
             )}
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Working variables inside the subflow are edited on its own canvas
+              (open the subflow, then the Flow variables panel).
+            </p>
           </div>
         )}
 
         {d.kind === "fail" && (
-          <div className="space-y-2 border-t border-emerald-900/10 pt-2">
+          <div className="space-y-2 border-t border-border pt-2">
             <div className="text-xs font-semibold">fail</div>
             <label className="block" title="business = bad data, no retry; system = infra, retried">
               <FieldLabel>mode</FieldLabel>

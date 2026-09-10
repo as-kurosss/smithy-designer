@@ -210,7 +210,7 @@ function SelectorModal({
         onClick={(e) => e.stopPropagation()}
         className="animate-enter flex max-h-96 w-80 flex-col overflow-hidden rounded-xl bg-card shadow-xl ring-1 ring-foreground/10"
       >
-        <div className="flex items-center justify-between border-b border-emerald-900/10 px-3 py-2">
+        <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
             {title}
           </span>
@@ -277,7 +277,7 @@ function SelectorModal({
             </select>
           )}
         </div>
-        <div className="border-t border-emerald-900/10 px-3 py-2">
+        <div className="border-t border-border px-3 py-2">
           <code className="block truncate rounded-lg bg-muted px-2 py-1 font-mono text-[10px] text-muted-foreground">
             {xml || "\u00a0"}
           </code>
