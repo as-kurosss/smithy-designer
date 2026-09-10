@@ -1,6 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 
-export type NodeKind = "start" | "end" | "if" | "tool" | "loop" | "set";
+export type NodeKind = "start" | "end" | "if" | "tool" | "loop" | "set" | "fail" | "flow";
 
 export type CondOp =
   | "eq"
@@ -111,6 +111,8 @@ const HANDLES_BY_KIND: Record<NodeKind, string[]> = {
   set: ["out", "error"],
   if: ["true", "false", "error"],
   loop: ["body", "done", "error"],
+  fail: [],
+  flow: ["out", "error"],
 };
 
 /** Graph sanity checks mirroring the server-side _validate_flow. */

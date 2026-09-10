@@ -1,18 +1,22 @@
-"""Publish a flow-v2 document to a smithy-cloud orchestrator as a process bundle.
+"""Publish a flow project to a smithy-cloud orchestrator as a pack.
 
-The bundle contract (engine-agnostic):
-    files        {"flow.json": <doc>, "main.py": <runner shim>}
-    entry_point  main.py
-    requirements ["smithy-engine[windows]>=0.7"]
+The designer edits a **project**: a main flow file plus reusable subflows
+under ``flows/``. Publishing turns the whole directory into a
+``smithy-pack-v1`` archive:
 
-The shim runs the flow with the engine's FlowRunner at start-up; the agent
-executes it exactly like any other Python process. Later, a designer UI
-button can reuse :func:`publish` — the wire format will not change.
+* the main flow is the pack's ``process`` stage (``entry``);
+* subflows travel as regular files and are referenced by ``flow`` nodes via
+  relative ``path`` (``flows/login.flow.json``);
+* :func:`smithy.pack.publish_pack` builds the manifest, zips and uploads to
+  ``POST {base_url}/api/packs/{name}/versions/{version}``.
+
+Versions are immutable: re-publishing the same ``name``/``version`` is a
+409. Pass ``--version`` for a release, or rely on the timestamp default.
 
 Usage:
     python -m smithy_designer.publish flow.web.json \
         --url http://localhost:8000 --token sct_... \
-        [--name my-flow] [--deploy AGENT_ID]
+        [--name my-flow] [--version 1.0.0] [--insecure] [--open]
 """
 
 from __future__ import annotations
@@ -20,102 +24,129 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
+import time
 import urllib.error
 import urllib.request
+import webbrowser
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
-RUNNER_SHIM = '''\
-"""Runs the bundled flow.json with the smithy engine."""
-
-import sys
-
-from smithy.run_flow import main
-
-sys.exit(main(["flow.json"]))
-'''
-
-DEFAULT_REQUIREMENTS = ["smithy-engine[windows]>=0.7"]
+from smithy.pack import publish_pack
 
 
-def _request(
-    method: str,
-    url: str,
-    token: str,
-    payload: dict[str, Any] | None = None,
-) -> Any:
-    data = json.dumps(payload).encode() if payload is not None else None
-    req = urllib.request.Request(
-        url,
-        data=data,
-        method=method,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as res:
-            body = res.read().decode()
-            return json.loads(body) if body else None
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode() or exc.reason
-        raise SystemExit(f"orchestrator returned {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise SystemExit(f"cannot reach orchestrator: {exc.reason}") from exc
+def _default_version() -> str:
+    """A unique dotted-numeric version for quick re-publishes."""
+    return f"1.0.{int(time.time())}"
 
 
 def publish(
-    doc: dict[str, Any],
+    directory: str | Path,
     base_url: str,
     token: str,
-    name: str | None = None,
+    name: str,
+    version: str,
+    *,
+    entry: dict[str, str] | None = None,
+    allow_insecure: bool = False,
 ) -> dict[str, Any]:
-    """Create the process bundle on the orchestrator; returns its response."""
-    files = {
-        "flow.json": json.dumps(doc, ensure_ascii=False, indent=2),
-        "main.py": RUNNER_SHIM,
+    """Build and upload the flow *directory* as a pack; return info.
+
+    Raises:
+        ValueError: When *directory* is not a directory.
+        smithy.core.errors.InvalidInput: On pack build/upload failure.
+    """
+    root = Path(directory)
+    if not root.is_dir():
+        raise ValueError(f"flow project directory does not exist: {root}")
+    api_url = f"{base_url.rstrip('/')}/api"
+    archive = Path(tempfile.gettempdir()) / f"{name}-{version}.zip"
+    publish_pack(
+        root,
+        name=name,
+        version=version,
+        api_url=api_url,
+        token=token,
+        entry=entry,
+        out=archive,
+        allow_insecure=allow_insecure,
+    )
+    info: dict[str, Any] = {
+        "name": name,
+        "version": version,
+        "orchestrator": base_url.rstrip("/"),
     }
-    payload = {
-        "name": name or "flow",
-        "entry_point": "main.py",
-        "files": files,
-        "requirements": DEFAULT_REQUIREMENTS,
-    }
-    result = _request("POST", f"{base_url.rstrip('/')}/api/processes", token, payload)
-    assert isinstance(result, dict)
-    return result
+    process_id = _find_process_id(base_url, token, name)
+    if process_id is not None:
+        info["process_id"] = process_id
+        info["process_url"] = f"{base_url.rstrip('/')}/processes/{process_id}"
+    return info
+
+
+def _find_process_id(base_url: str, token: str, name: str) -> str | None:
+    """Best-effort lookup of the process the pack was materialized as."""
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}/api/processes",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            data: Any = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+    if not isinstance(data, list):
+        return None
+    for item in data:
+        if isinstance(item, dict) and item.get("name") == name and item.get("id") is not None:
+            return str(item["id"])
+    return None
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="smithy_designer.publish", description=__doc__)
-    parser.add_argument("flow", help="path to a v2 flow document (JSON)")
+    parser.add_argument("flow", help="path to the project's main flow document (JSON)")
     parser.add_argument("--url", required=True, help="orchestrator base URL")
     parser.add_argument("--token", required=True, help="API token (sct_...) or user JWT")
-    parser.add_argument("--name", help="process name (default: flow file stem)")
+    parser.add_argument("--name", help="pack name (default: flow file stem)")
     parser.add_argument(
-        "--deploy", metavar="AGENT_ID", help="also deploy the process to this agent"
+        "--version",
+        help="pack version (default: 1.0.<unixtime>; versions are immutable)",
     )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        help="allow plain http to a non-loopback orchestrator (token in cleartext)",
+    )
+    parser.add_argument("--open", action="store_true", help="open the orchestrator when done")
     args = parser.parse_args(argv)
 
-    doc: dict[str, Any] = json.loads(Path(args.flow).read_text(encoding="utf-8"))
-    if doc.get("version") != 2:
-        print(f"refusing to publish: flow version {doc.get('version')!r} is not 2", file=sys.stderr)
+    project = Path(args.flow).resolve()
+    if not project.is_file():
+        print(f"refusing to publish: {project} is not a file", file=sys.stderr)
         return 1
 
-    name = args.name or Path(args.flow).stem
-    process = publish(doc, args.url, args.token, name=name)
-    pid = str(process["id"])
-    print(f"published: process {pid} ({process.get('name', name)})")
-
-    if args.deploy:
-        deployment = _request(
-            "POST",
-            f"{args.url.rstrip('/')}/api/processes/{pid}/deploy",
+    name = args.name or project.stem
+    version = args.version or _default_version()
+    try:
+        info = publish(
+            project.parent,
+            args.url,
             args.token,
-            {"agent_id": args.deploy},
+            name,
+            version,
+            entry={"process": project.name},
+            allow_insecure=args.insecure,
         )
-        print(f"deployed: deployment {deployment['id']} -> {deployment.get('status')}")
+    except Exception as exc:  # surfaced as a one-line CLI error
+        print(f"publish failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"published: {info['name']} {info['version']} -> {info['orchestrator']}")
+    if info.get("process_url"):
+        print(f"orchestrator: {info['process_url']}")
+    if args.open:
+        webbrowser.open(str(info.get("process_url") or info["orchestrator"]))
     return 0
 
 

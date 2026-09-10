@@ -11,6 +11,8 @@ const CONTROLS: { kind: NodeKind; label: string }[] = [
   { kind: "if", label: "if / branch" },
   { kind: "loop", label: "loop" },
   { kind: "set", label: "set variable" },
+  { kind: "flow", label: "subflow" },
+  { kind: "fail", label: "fail" },
 ];
 
 type TabId = "controls" | "windows";

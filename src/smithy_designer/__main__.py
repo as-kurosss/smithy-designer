@@ -21,8 +21,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "flow",
         nargs="?",
-        default="flow.web.json",
-        help="flow file to open/edit (default: flow.web.json)",
+        default="flow.json",
+        help="main flow file of the project (default: flow.json)",
     )
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--no-browser", action="store_true", help="do not open browser")

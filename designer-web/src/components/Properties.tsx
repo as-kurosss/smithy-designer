@@ -3,6 +3,7 @@ import { SlidersHorizontal } from "lucide-react";
 import type { SmithyFlowNode, ToolInfo, ToolSchemaProp } from "../types";
 import { COND_OPS, coerce } from "../types";
 import type { Condition } from "../types";
+import type { FlowFile } from "../api";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -37,6 +38,23 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <span className="mb-1 block text-xs font-medium">{children}</span>
   );
+}
+
+/** Parse JSON when possible; otherwise keep the raw string (engine validates). */
+function parseJsonOrRaw(raw: string): unknown {
+  const trimmed = raw.trim();
+  if (trimmed === "") return undefined;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return raw;
+  }
+}
+
+function jsonText(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value;
+  return JSON.stringify(value, null, 2);
 }
 
 function ConditionEditor({
@@ -89,13 +107,17 @@ function ConditionEditor({
 export default function Properties({
   node,
   tools,
+  flows,
   onPatch,
   onDelete,
+  onOpenFlow,
 }: {
   node: SmithyFlowNode | null;
   tools: ToolInfo[];
+  flows: FlowFile[];
   onPatch: (id: string, data: Record<string, unknown>) => void;
   onDelete: (id: string) => void;
+  onOpenFlow: (path: string) => void;
 }) {
   const patch = useCallback(
     (id: string, data: Record<string, unknown>) => onPatch(id, data),
@@ -383,6 +405,103 @@ export default function Properties({
                 onChange={(e) =>
                   patch(node.id, { config: { ...cfg, value: e.target.value } })
                 }
+              />
+            </label>
+          </div>
+        )}
+
+        {d.kind === "flow" && (
+          <div className="space-y-2 border-t border-emerald-900/10 pt-2">
+            <div className="text-xs font-semibold">subflow</div>
+            <label className="block">
+              <FieldLabel>path</FieldLabel>
+              <Select
+                className="h-7 text-xs"
+                value={String(cfg.path ?? "")}
+                onChange={(e) => patch(node.id, { config: { ...cfg, path: e.target.value } })}
+              >
+                <option value="">— pick a flow —</option>
+                {flows.map((f) => (
+                  <option key={f.path} value={f.path}>
+                    {f.path}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            {typeof cfg.path === "string" && cfg.path !== "" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => onOpenFlow(cfg.path as string)}
+              >
+                Open subflow
+              </Button>
+            )}
+            <label
+              className="block"
+              title="shared = same variables; isolated = only declared inputs/outputs"
+            >
+              <FieldLabel>scope</FieldLabel>
+              <Select
+                className="h-7 text-xs"
+                value={String(cfg.scope ?? "shared")}
+                onChange={(e) => patch(node.id, { config: { ...cfg, scope: e.target.value } })}
+              >
+                <option value="shared">shared</option>
+                <option value="isolated">isolated</option>
+              </Select>
+            </label>
+            <label className="block">
+              <FieldLabel>inputs (JSON)</FieldLabel>
+              <Textarea
+                className="h-16 min-h-0 font-mono text-xs"
+                value={jsonText(cfg.inputs)}
+                placeholder='{ "user": "$username" }'
+                onChange={(e) =>
+                  patch(node.id, { config: { ...cfg, inputs: parseJsonOrRaw(e.target.value) } })
+                }
+              />
+            </label>
+            {cfg.scope === "isolated" && (
+              <label className="block">
+                <FieldLabel>outputs (JSON)</FieldLabel>
+                <Textarea
+                  className="h-16 min-h-0 font-mono text-xs"
+                  value={jsonText(cfg.outputs)}
+                  placeholder='{ "session": "token" } or ["result"]'
+                  onChange={(e) =>
+                    patch(node.id, {
+                      config: { ...cfg, outputs: parseJsonOrRaw(e.target.value) },
+                    })
+                  }
+                />
+              </label>
+            )}
+          </div>
+        )}
+
+        {d.kind === "fail" && (
+          <div className="space-y-2 border-t border-emerald-900/10 pt-2">
+            <div className="text-xs font-semibold">fail</div>
+            <label className="block" title="business = bad data, no retry; system = infra, retried">
+              <FieldLabel>mode</FieldLabel>
+              <Select
+                className="h-7 text-xs"
+                value={String(cfg.mode ?? "business")}
+                onChange={(e) => patch(node.id, { config: { ...cfg, mode: e.target.value } })}
+              >
+                <option value="business">business (no retry)</option>
+                <option value="system">system (retried)</option>
+              </Select>
+            </label>
+            <label className="block">
+              <FieldLabel>message</FieldLabel>
+              <Input
+                className="h-7 text-xs"
+                value={String(cfg.message ?? "")}
+                placeholder="amount is $amount"
+                onChange={(e) => patch(node.id, { config: { ...cfg, message: e.target.value } })}
               />
             </label>
           </div>

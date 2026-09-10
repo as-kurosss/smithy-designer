@@ -85,6 +85,8 @@ const SHAPE_META: Record<NodeKind, ShapeMeta> = {
   loop: { fill: "#fef3c7", stroke: "#f59e0b", text: "text-amber-800" },
   tool: { fill: "#ffffff", stroke: "#059669", text: "text-emerald-800" },
   set: { fill: "#ecfdf5", stroke: "#059669", text: "text-emerald-800" },
+  fail: { fill: "#fee2e2", stroke: "#ef4444", text: "text-red-700" },
+  flow: { fill: "#eef2ff", stroke: "#6366f1", text: "text-indigo-700" },
 };
 
 function shortTool(tool?: string): string {
@@ -365,6 +367,100 @@ function ToolNode({
   );
 }
 
+/* -- subflow (calls another flow file) ------------------------------------ */
+
+function FlowNode({
+  data,
+  selected,
+}: {
+  id: string;
+  data: SmithyFlowNode["data"];
+  selected?: boolean;
+}) {
+  const cfg = (data.config ?? {}) as Record<string, unknown>;
+  const path = String(cfg.path ?? "");
+  const name = path ? path.split("/").pop() || path : "pick a flow";
+  const scope = String(cfg.scope ?? "shared");
+  return (
+    <div
+      className={`relative w-36 rounded-xl border-2 bg-card text-card-foreground shadow-md shadow-indigo-600/20 ${
+        selected ? "ring-2 ring-indigo-500" : ""
+      } ${data.current ? "animate-pulse ring-2 ring-amber-500" : ""}`}
+      style={{ borderColor: SHAPE_META.flow.stroke }}
+    >
+      {data.breakpoint && <BreakpointDot />}
+      <div className="rounded-t-[10px] bg-indigo-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-indigo-700">
+        Subflow · {scope}
+      </div>
+      <div className="truncate px-2 pt-0.5 text-xs font-medium">{name}</div>
+      <LabelView label={data.label} className="block truncate px-2 text-[8px]" />
+      <div className="truncate px-2 pb-1 font-mono text-[8px] text-muted-foreground">
+        {path || "set path in Properties · double-click to open"}
+      </div>
+      <TargetHandles />
+      <Handle type="source" position={Position.Bottom} id="out" className={HANDLE} />
+      <Handle type="source" position={Position.Right} id="error" className={ERROR_HANDLE}>
+        <span className={TAG_ERR}>err</span>
+      </Handle>
+    </div>
+  );
+}
+
+/* -- fail (terminal failure) ---------------------------------------------- */
+
+function FailNode({
+  id,
+  data,
+  selected,
+}: {
+  id: string;
+  data: SmithyFlowNode["data"];
+  selected?: boolean;
+}) {
+  const { editingId, startEdit } = useContext(NodeEditContext);
+  const editing = editingId === id;
+  const cfg = (data.config ?? {}) as Record<string, unknown>;
+  const mode = String(cfg.mode ?? "business");
+  const message = String(cfg.message ?? "");
+  return (
+    <div
+      onDoubleClick={() => startEdit(id)}
+      className={`relative h-14 w-32 ${selected ? "drop-shadow-lg" : "drop-shadow-md"} ${data.current ? "animate-pulse" : ""}`}
+    >
+      {data.breakpoint && <BreakpointDot />}
+      <svg viewBox="0 0 128 56" className="absolute inset-0 h-full w-full">
+        <polygon
+          points="3,3 125,3 125,53 3,53"
+          fill="#fee2e2"
+          stroke="#ef4444"
+          strokeWidth={selected ? 4 : 2}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 px-3 text-center">
+        {editing ? (
+          <LabelEditor
+            nodeId={id}
+            initial={data.label ?? ""}
+            done={() => startEdit("")}
+            className="h-4 w-24 rounded-md border border-ring bg-card text-center text-[8px] text-foreground outline-none"
+          />
+        ) : (
+          <>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-red-700">
+              Fail · {mode}
+            </span>
+            <LabelView label={data.label} className="line-clamp-1 w-full text-[8px]" />
+            <span className="line-clamp-1 w-full text-[8px] text-muted-foreground">
+              {message || "no message"}
+            </span>
+          </>
+        )}
+      </div>
+      <TargetHandles />
+    </div>
+  );
+}
+
 /* -- main ------------------------------------------------------------------ */
 
 export default function SmithyNode({ id, data, selected }: NodeProps<SmithyFlowNode>) {
@@ -373,5 +469,7 @@ export default function SmithyNode({ id, data, selected }: NodeProps<SmithyFlowN
   }
   if (data.kind === "set") return <ParallelogramNode id={id} data={data} selected={selected} />;
   if (data.kind === "tool") return <ToolNode id={id} data={data} selected={selected} />;
+  if (data.kind === "flow") return <FlowNode id={id} data={data} selected={selected} />;
+  if (data.kind === "fail") return <FailNode id={id} data={data} selected={selected} />;
   return <StadiumNode id={id} data={data} selected={selected} />;
 }
