@@ -25,12 +25,12 @@ import type {
   FlowEdgeDto,
   FlowNodeDto,
   NodeKind,
-  SmithcoreFlowEdge,
-  SmithcoreFlowNode,
-  SmithcoreNodeData,
+  SmithCoreFlowEdge,
+  SmithCoreFlowNode,
+  SmithCoreNodeData,
   ToolInfo,
 } from "./types";
-import SmithcoreNodeComponent, { NodeEditContext } from "./components/SmithcoreNode";
+import SmithCoreNodeComponent, { NodeEditContext } from "./components/SmithCoreNode";
 import Toolbox from "./components/Toolbox";
 import Properties from "./components/Properties";
 import DebugMenu from "./components/DebugMenu";
@@ -44,7 +44,7 @@ import VariablesPanel from "./components/VariablesPanel";
 import CreateSubflowModal from "./components/CreateSubflowModal";
 import SubflowVarsModal from "./components/SubflowVarsModal";
 
-const nodeTypes = { smithcore: SmithcoreNodeComponent };
+const nodeTypes = { smithcore: SmithCoreNodeComponent };
 const edgeOptions = {
   type: "smoothstep",
   markerEnd: { type: MarkerType.ArrowClosed, color: "#747a75" },
@@ -72,7 +72,7 @@ function starterDoc(): FlowDoc {
   };
 }
 
-function toFlowNode(n: FlowNodeDto): SmithcoreFlowNode {
+function toFlowNode(n: FlowNodeDto): SmithCoreFlowNode {
     return {
       id: n.id,
       type: "smithcore",
@@ -89,7 +89,7 @@ function toFlowNode(n: FlowNodeDto): SmithcoreFlowNode {
     };
 }
 
-function toFlowEdge(e: FlowEdgeDto): SmithcoreFlowEdge {
+function toFlowEdge(e: FlowEdgeDto): SmithCoreFlowEdge {
   return {
     id: e.id,
     source: e.source,
@@ -100,8 +100,8 @@ function toFlowEdge(e: FlowEdgeDto): SmithcoreFlowEdge {
 }
 
 function toDoc(
-  nodes: SmithcoreFlowNode[],
-  edges: SmithcoreFlowEdge[],
+  nodes: SmithCoreFlowNode[],
+  edges: SmithCoreFlowEdge[],
   variables: VarRow[] = [],
 ): FlowDoc {
   const vars = rowsToFlowVars(variables);
@@ -136,8 +136,8 @@ function toDoc(
 }
 
 export default function App() {
-  const [nodes, setNodes, onNodesChange] = useNodesState<SmithcoreFlowNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<SmithcoreFlowEdge>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<SmithCoreFlowNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<SmithCoreFlowEdge>([]);
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -149,7 +149,7 @@ export default function App() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [record, setRecord] = useState<RecordState | null>(null);
-  const rf = useReactFlow<SmithcoreFlowNode, SmithcoreFlowEdge>();
+  const rf = useReactFlow<SmithCoreFlowNode, SmithCoreFlowEdge>();
   const [flows, setFlows] = useState<FlowFile[]>([]);
   const [activePath, setActivePath] = useState("flow.json");
   const [variableRows, setVariableRows] = useState<VarRow[]>(() => flowVarsToRows(undefined));
@@ -223,7 +223,7 @@ export default function App() {
   const addNode = useCallback(
     (kind: NodeKind, tool: string | undefined, position: { x: number; y: number }) => {
       const id = newId();
-      const data: SmithcoreNodeData = { kind, tool, config: {} };
+      const data: SmithCoreNodeData = { kind, tool, config: {} };
       setNodes((ns) => ns.concat({ id, type: "smithcore", position, data }));
       setSelectedId(id);
       setRightTab("properties");
@@ -481,7 +481,7 @@ export default function App() {
       // Append the recorded steps to the current canvas instead of replacing
       // it; they are laid out vertically in a free column below existing nodes.
       const idMap = new Map<string, string>();
-      const additions: SmithcoreFlowNode[] = [];
+      const additions: SmithCoreFlowNode[] = [];
       for (const n of flow.nodes ?? []) {
         if (n.kind === "start" || n.kind === "end") continue;
         const nid = newId();
@@ -497,7 +497,7 @@ export default function App() {
           n.position = { x: baseX, y: baseY + i * 130 };
         });
         setNodes((ns) => ns.concat(additions));
-        const addEdges: SmithcoreFlowEdge[] = [];
+        const addEdges: SmithCoreFlowEdge[] = [];
         for (const e of flow.edges ?? []) {
           const source = idMap.get(e.source);
           const target = idMap.get(e.target);
@@ -587,7 +587,7 @@ export default function App() {
             <Workflow className="h-4 w-4" />
           </span>
           <span className="shrink-0 text-sm font-bold tracking-tight">
-            Smithcore <span className="text-primary">Designer</span>
+            SmithCore <span className="text-primary">Designer</span>
           </span>
         </div>
         <div className="flex flex-1 items-center justify-center gap-1">
@@ -717,7 +717,7 @@ export default function App() {
             onDragOver={onDragOver}
           >
             <NodeEditContext.Provider value={nodeEditContext}>
-              <ReactFlow<SmithcoreFlowNode, SmithcoreFlowEdge>
+              <ReactFlow<SmithCoreFlowNode, SmithCoreFlowEdge>
                 nodes={nodes}
                 edges={edges}
                 onNodesChange={onNodesChange}

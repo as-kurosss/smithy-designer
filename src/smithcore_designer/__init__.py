@@ -1,1 +1,1 @@
-"""Smithcore designer - minimal Textual TUI for editing flow graphs (spike)."""
+"""SmithCore designer - minimal Textual TUI for editing flow graphs (spike)."""

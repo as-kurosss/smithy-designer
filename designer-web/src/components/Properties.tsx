@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { SmithcoreFlowNode, ToolInfo, ToolSchemaProp } from "../types";
+import type { SmithCoreFlowNode, ToolInfo, ToolSchemaProp } from "../types";
 import { COND_OPS, coerce } from "../types";
 import type { Condition } from "../types";
 import type { FlowFile } from "../api";
@@ -216,7 +216,7 @@ export default function Properties({
   onCaptureSelector,
   embedded = false,
 }: {
-  node: SmithcoreFlowNode | null;
+  node: SmithCoreFlowNode | null;
   tools: ToolInfo[];
   flows: FlowFile[];
   onPatch: (id: string, data: Record<string, unknown>) => void;

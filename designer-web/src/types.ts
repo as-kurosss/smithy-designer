@@ -26,7 +26,7 @@ export interface LoopSpec {
   max_iterations?: number;
 }
 
-export type SmithcoreNodeData = {
+export type SmithCoreNodeData = {
   kind: NodeKind;
   tool?: string;
   config: Record<string, unknown>;
@@ -39,8 +39,8 @@ export type SmithcoreNodeData = {
   [key: string]: unknown;
 };
 
-export type SmithcoreFlowNode = Node<SmithcoreNodeData, "smithcore">;
-export type SmithcoreFlowEdge = Edge;
+export type SmithCoreFlowNode = Node<SmithCoreNodeData, "smithcore">;
+export type SmithCoreFlowEdge = Edge;
 
 export interface FlowNodeDto {
   id: string;

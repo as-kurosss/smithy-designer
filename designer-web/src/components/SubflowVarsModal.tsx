@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import Modal from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { SmithcoreFlowNode } from "../types";
+import type { SmithCoreFlowNode } from "../types";
 import { isIdentifier, recordToRows, rowsToRecord, type VarRow } from "./VariableRows";
 
 function VarTable({
@@ -96,7 +96,7 @@ export default function SubflowVarsModal({
   onPatch,
   onClose,
 }: {
-  node: SmithcoreFlowNode;
+  node: SmithCoreFlowNode;
   onPatch: (id: string, data: Record<string, unknown>) => void;
   onClose: () => void;
 }) {

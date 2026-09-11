@@ -1,4 +1,4 @@
-"""Run the Smithcore web designer: smithcore-designer [flow.json]."""
+"""Run the SmithCore web designer: smithcore-designer [flow.json]."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     flow_path = Path(args.flow).resolve()
     app = create_app(flow_path)
     url = f"http://127.0.0.1:{args.port}"
-    print(f"Smithcore designer: {url}  (flow: {flow_path})")
+    print(f"SmithCore designer: {url}  (flow: {flow_path})")
     if not args.no_browser:
         threading.Timer(1.0, webbrowser.open, [url]).start()
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")

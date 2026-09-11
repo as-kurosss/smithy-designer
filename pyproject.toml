@@ -24,6 +24,11 @@ dev = ["pytest>=8", "pytest-asyncio>=1.0", "ruff>=0.12", "mypy>=1.18"]
 [project.scripts]
 smithcore-designer = "smithcore_designer.__main__:main"
 
+# Local dev: use the sibling engine checkout until smithcore-engine is on
+# PyPI (pip ignores this section and resolves from the registry).
+[tool.uv.sources]
+smithcore-engine = { path = "../smithy", editable = true }
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/smithcore_designer"]
 # ship the prebuilt UI inside the wheel (built by CI / manually)

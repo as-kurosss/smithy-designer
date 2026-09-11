@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { Settings } from "lucide-react";
-import type { Condition, LoopSpec, NodeKind, SmithcoreFlowNode } from "../types";
+import type { Condition, LoopSpec, NodeKind, SmithCoreFlowNode } from "../types";
 
 /* -- double-click label editing ------------------------------------------- */
 
@@ -135,7 +135,7 @@ function DiamondNode({
   selected,
 }: {
   id: string;
-  data: SmithcoreFlowNode["data"];
+  data: SmithCoreFlowNode["data"];
   selected?: boolean;
 }) {
   const kind = data.kind;
@@ -211,7 +211,7 @@ function StadiumNode({
   selected,
 }: {
   id: string;
-  data: SmithcoreFlowNode["data"];
+  data: SmithCoreFlowNode["data"];
   selected?: boolean;
 }) {
   const meta = SHAPE_META[data.kind];
@@ -261,7 +261,7 @@ function ParallelogramNode({
   selected,
 }: {
   id: string;
-  data: SmithcoreFlowNode["data"];
+  data: SmithCoreFlowNode["data"];
   selected?: boolean;
 }) {
   const meta = SHAPE_META.set;
@@ -324,7 +324,7 @@ function ToolNode({
   selected,
 }: {
   id: string;
-  data: SmithcoreFlowNode["data"];
+  data: SmithCoreFlowNode["data"];
   selected?: boolean;
 }) {
   const meta = SHAPE_META.tool;
@@ -382,7 +382,7 @@ function FlowNode({
   selected,
 }: {
   id: string;
-  data: SmithcoreFlowNode["data"];
+  data: SmithCoreFlowNode["data"];
   selected?: boolean;
 }) {
   const { openVars } = useContext(NodeEditContext);
@@ -433,7 +433,7 @@ function FailNode({
   selected,
 }: {
   id: string;
-  data: SmithcoreFlowNode["data"];
+  data: SmithCoreFlowNode["data"];
   selected?: boolean;
 }) {
   const { editingId, startEdit } = useContext(NodeEditContext);
@@ -482,7 +482,7 @@ function FailNode({
 
 /* -- main ------------------------------------------------------------------ */
 
-export default function SmithcoreNode({ id, data, selected }: NodeProps<SmithcoreFlowNode>) {
+export default function SmithCoreNode({ id, data, selected }: NodeProps<SmithCoreFlowNode>) {
   if (data.kind === "if" || data.kind === "loop") {
     return <DiamondNode id={id} data={data} selected={selected} />;
   }

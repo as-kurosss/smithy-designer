@@ -1,4 +1,4 @@
-"""Web designer backend: local FastAPI server for the Smithcore flow editor.
+"""Web designer backend: local FastAPI server for the SmithCore flow editor.
 
 The designer edits a **flow project**: a main flow file (``flow.json`` by
 default) plus reusable subflows under ``flows/``. The canvas opens one file
