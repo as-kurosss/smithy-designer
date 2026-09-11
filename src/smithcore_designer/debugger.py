@@ -1,10 +1,10 @@
 """Step debugger for v2 flow documents.
 
-Interactive layer on top of the engine-side :mod:`smithy.flow` executor:
+Interactive layer on top of the engine-side :mod:`smithcore.flow` executor:
 runs a flow graph node by node with pause/resume/step control, breakpoints,
 a variable scope shared with a REPL evaluator, and a structured event log.
 All node execution (tool calls, interpolation, conditions, loops, ``set``)
-is delegated to :class:`smithy.flow.FlowRunner` — the debugger only owns
+is delegated to :class:`smithcore.flow.FlowRunner` — the debugger only owns
 the control flow: gates, retries, breakpoints and the REPL.
 
 Variables:
@@ -27,7 +27,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
-from smithy.flow import (
+from smithcore.flow import (
     FLOW_VERSION,
     FlowError,
     FlowRunner,
@@ -36,7 +36,7 @@ from smithy.flow import (
 )
 
 if TYPE_CHECKING:
-    from smithy.core.registry import ToolRegistry
+    from smithcore.core.registry import ToolRegistry
 
 _MAX_LOG = 500
 _MAX_REPL = 100

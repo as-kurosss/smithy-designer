@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  /* Canvas and ink — notion.so paper, green cast (same tokens as smithy-cloud) */
+  /* Canvas and ink — notion.so paper, green cast (same tokens as smithcore-cloud) */
   --color-background: #f4f7f4;
   --color-foreground: #111111;
   --color-card: #ffffff;

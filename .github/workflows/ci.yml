@@ -25,13 +25,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
-      # smithy-engine is not on PyPI yet — install the core from git
-      - run: pip install "smithy-engine @ git+https://github.com/as-kurosss/smithy-engine.git" fastapi uvicorn "textual>=8.2.8" mypy
+      # smithcore-engine is not on PyPI yet — install the core from git
+      - run: pip install "smithcore-engine @ git+https://github.com/as-kurosss/smithcore-engine.git" fastapi uvicorn "textual>=8.2.8" mypy
       # hatchling force-include requires designer-web/dist to exist (stub — the
       # real UI is built in the frontend job)
       - run: mkdir -p designer-web/dist && touch designer-web/dist/index.html
       - run: pip install -e . --no-deps
-      - run: mypy src/smithy_designer --strict
+      - run: mypy src/smithcore_designer --strict
 
   frontend:
     runs-on: ubuntu-latest
@@ -62,7 +62,7 @@ jobs:
         working-directory: designer-web
       - run: npm run build
         working-directory: designer-web
-      - name: Build wheel (bundles the UI into src/smithy_designer/static)
+      - name: Build wheel (bundles the UI into src/smithcore_designer/static)
         run: python -m build --wheel
       - uses: actions/upload-artifact@v4
         with:

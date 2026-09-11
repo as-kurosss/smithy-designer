@@ -3,15 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "smithy-designer"
+name = "smithcore-designer"
 version = "0.3.0"
-description = "Visual flow editor for the smithy RPA engine"
+description = "Visual flow editor for the smithcore RPA engine"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [{ name = "as-kurosss" }]
 dependencies = [
-    "smithy-engine>=0.8.11",
+    "smithcore-engine>=0.8.11",
     "fastapi>=0.115",
     "uvicorn>=0.30",
 ]
@@ -22,12 +22,12 @@ tui = ["textual>=8.2.8", "rich>=13"]
 dev = ["pytest>=8", "pytest-asyncio>=1.0", "ruff>=0.12", "mypy>=1.18"]
 
 [project.scripts]
-smithy-designer = "smithy_designer.__main__:main"
+smithcore-designer = "smithcore_designer.__main__:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/smithy_designer"]
+packages = ["src/smithcore_designer"]
 # ship the prebuilt UI inside the wheel (built by CI / manually)
-force-include = { "designer-web/dist" = "src/smithy_designer/static" }
+force-include = { "designer-web/dist" = "src/smithcore_designer/static" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

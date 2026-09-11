@@ -53,7 +53,7 @@ function shortName(name: string): string {
 
 function dragHandler(payload: { kind: NodeKind; tool?: string }) {
   return (e: DragEvent) => {
-    e.dataTransfer.setData("application/smithy", JSON.stringify(payload));
+    e.dataTransfer.setData("application/smithcore", JSON.stringify(payload));
     e.dataTransfer.effectAllowed = "move";
   };
 }

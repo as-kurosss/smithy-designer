@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from smithy.windows.tools.selector_capture import CaptureCancelled, capture_once
+from smithcore.windows.tools.selector_capture import CaptureCancelled, capture_once
 
 
 class CaptureError(RuntimeError):

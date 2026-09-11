@@ -11,10 +11,10 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING, Any
 
-from smithy.windows.tools.selector_capture import nodes_to_flow, record_series
+from smithcore.windows.tools.selector_capture import nodes_to_flow, record_series
 
 if TYPE_CHECKING:
-    from smithy.windows.tools.selector_capture.generate import FlowNode
+    from smithcore.windows.tools.selector_capture.generate import FlowNode
 
 
 class RecordError(RuntimeError):
@@ -47,7 +47,7 @@ class RecordSession:
         with self._lock:
             self._nodes = []
         self._error = None
-        self._thread = threading.Thread(target=self._run, name="smithy-record", daemon=True)
+        self._thread = threading.Thread(target=self._run, name="smithcore-record", daemon=True)
         self._thread.start()
 
     def _record_step(self, node: FlowNode) -> None:

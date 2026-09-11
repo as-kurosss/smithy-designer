@@ -1,6 +1,6 @@
 """Designer spike: interactive node canvas in the terminal.
 
-Run:  python -m smithy_designer.tui   (Windows Terminal recommended)
+Run:  python -m smithcore_designer.tui   (Windows Terminal recommended)
 
 Controls:
     mouse drag - move a node
@@ -234,7 +234,7 @@ class NodeCanvas(Widget):
 class DesignerSpike(App[None]):
     """Terminal designer look-and-feel prototype."""
 
-    TITLE = "SMITHY DESIGNER (spike)"
+    TITLE = "SMITHCORE DESIGNER (spike)"
     SUB_TITLE = "flow2.json · drag nodes with mouse · Tab/arrows · q quits"
 
     BINDINGS = [Binding("q", "quit", "Quit")]

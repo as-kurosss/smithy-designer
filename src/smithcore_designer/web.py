@@ -1,4 +1,4 @@
-"""Web designer backend: local FastAPI server for the Smithy flow editor.
+"""Web designer backend: local FastAPI server for the Smithcore flow editor.
 
 The designer edits a **flow project**: a main flow file (``flow.json`` by
 default) plus reusable subflows under ``flows/``. The canvas opens one file
@@ -36,14 +36,14 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from smithy.core.registry import ToolRegistry
-from smithy.flow import validate_document
+from smithcore.core.registry import ToolRegistry
+from smithcore.flow import validate_document
 
-from smithy_designer.capture import CaptureError
-from smithy_designer.capture import capture_selector as _capture_selector
-from smithy_designer.debugger import DebugError, FlowDebugger
-from smithy_designer.publish import publish as publish_flow
-from smithy_designer.record import RecordError, RecordSession
+from smithcore_designer.capture import CaptureError
+from smithcore_designer.capture import capture_selector as _capture_selector
+from smithcore_designer.debugger import DebugError, FlowDebugger
+from smithcore_designer.publish import publish as publish_flow
+from smithcore_designer.record import RecordError, RecordSession
 
 _FLOW_VERSION = 2
 _MAX_BODY_BYTES = 1_000_000
@@ -96,7 +96,7 @@ async def _read_json(request: Request, max_bytes: int = _MAX_BODY_BYTES) -> Any:
 def _registry() -> ToolRegistry:
     registry = ToolRegistry()
     try:
-        from smithy.windows.tools import windows_tools
+        from smithcore.windows.tools import windows_tools
 
         for tool in windows_tools():
             registry.register(tool)
@@ -120,7 +120,7 @@ def _validate_flow(data: Any, registry: ToolRegistry | None = None) -> dict[str,
     """Validate a flow-v2 document.
 
     Structural rules (node shapes, handles, ``on_error``, …) come from the
-    engine's :func:`smithy.flow.validate_document`; only HTTP-shape
+    engine's :func:`smithcore.flow.validate_document`; only HTTP-shape
     concerns and the designer's "one edge per handle" rule live here, so
     the editor and the runner cannot drift apart.
     """
@@ -207,7 +207,7 @@ def _starter_subflow() -> dict[str, Any]:
 
 def create_app(flow_path: Path) -> FastAPI:
     """Build the designer app bound to a flow project (one main flow file)."""
-    app = FastAPI(title="smithy-designer", docs_url=None, redoc_url=None)
+    app = FastAPI(title="smithcore-designer", docs_url=None, redoc_url=None)
     registry = _registry()
     debugger = FlowDebugger(registry)
     recorder = RecordSession()
@@ -452,7 +452,7 @@ def create_app(flow_path: Path) -> FastAPI:
             return PlainTextResponse(
                 "Designer bundle not built yet.\n"
                 "Run:  cd designer-web && npm install && npm run build\n"
-                "Then restart python -m smithy_designer"
+                "Then restart python -m smithcore_designer"
             )
 
     return app

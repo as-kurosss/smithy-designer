@@ -1,20 +1,20 @@
-"""Publish a flow project to a smithy-cloud orchestrator as a pack.
+"""Publish a flow project to a smithcore-cloud orchestrator as a pack.
 
 The designer edits a **project**: a main flow file plus reusable subflows
 under ``flows/``. Publishing turns the whole directory into a
-``smithy-pack-v1`` archive:
+``smithcore-pack-v1`` archive:
 
 * the main flow is the pack's ``process`` stage (``entry``);
 * subflows travel as regular files and are referenced by ``flow`` nodes via
   relative ``path`` (``flows/login.flow.json``);
-* :func:`smithy.pack.publish_pack` builds the manifest, zips and uploads to
+* :func:`smithcore.pack.publish_pack` builds the manifest, zips and uploads to
   ``POST {base_url}/api/packs/{name}/versions/{version}``.
 
 Versions are immutable: re-publishing the same ``name``/``version`` is a
 409. Pass ``--version`` for a release, or rely on the timestamp default.
 
 Usage:
-    python -m smithy_designer.publish flow.web.json \
+    python -m smithcore_designer.publish flow.web.json \
         --url http://localhost:8000 --token sct_... \
         [--name my-flow] [--version 1.0.0] [--insecure] [--open]
 """
@@ -35,7 +35,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from smithy.pack import publish_pack
+from smithcore.pack import publish_pack
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
@@ -92,7 +92,7 @@ def publish(
 
     Raises:
         ValueError: When *directory* is not a directory.
-        smithy.core.errors.InvalidInput: On pack build/upload failure.
+        smithcore.core.errors.InvalidInput: On pack build/upload failure.
     """
     root = Path(directory)
     if not root.is_dir():
@@ -168,7 +168,7 @@ def _find_process_id(base_url: str, token: str, name: str) -> str | None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="smithy_designer.publish", description=__doc__)
+    parser = argparse.ArgumentParser(prog="smithcore_designer.publish", description=__doc__)
     parser.add_argument("flow", help="path to the project's main flow document (JSON)")
     parser.add_argument("--url", required=True, help="orchestrator base URL")
     parser.add_argument("--token", required=True, help="API token (sct_...) or user JWT")

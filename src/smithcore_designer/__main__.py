@@ -1,4 +1,4 @@
-"""Run the Smithy web designer: smithy-designer [flow.json]."""
+"""Run the Smithcore web designer: smithcore-designer [flow.json]."""
 
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ from pathlib import Path
 
 import uvicorn
 
-from smithy_designer.web import create_app
+from smithcore_designer.web import create_app
 
 DEFAULT_PORT = 8756
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     """Serve the designer UI and flow API for a single flow file."""
-    parser = argparse.ArgumentParser(prog="smithy-designer", description=__doc__)
+    parser = argparse.ArgumentParser(prog="smithcore-designer", description=__doc__)
     parser.add_argument(
         "flow",
         nargs="?",
@@ -31,7 +31,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     flow_path = Path(args.flow).resolve()
     app = create_app(flow_path)
     url = f"http://127.0.0.1:{args.port}"
-    print(f"Smithy designer: {url}  (flow: {flow_path})")
+    print(f"Smithcore designer: {url}  (flow: {flow_path})")
     if not args.no_browser:
         threading.Timer(1.0, webbrowser.open, [url]).start()
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")

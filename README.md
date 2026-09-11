@@ -1,9 +1,9 @@
-# smithy-designer
+# smithcore-designer
 
-Visual flow editor for the [smithy](https://github.com/as-kurosss/smithy-engine) RPA engine.
+Visual flow editor for the [smithcore](https://github.com/as-kurosss/smithcore-engine) RPA engine.
 
 Drag nodes onto the canvas, connect them, configure tool selectors, and debug
-the flow step by step — in the browser, against the local smithy engine.
+the flow step by step — in the browser, against the local smithcore engine.
 
 ![status](https://img.shields.io/badge/status-early%20beta-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
@@ -11,7 +11,7 @@ the flow step by step — in the browser, against the local smithy engine.
 ## Features
 
 - **Visual canvas** — nodes for control flow (start/end/if/loop/fail), variables
-  (`set` node), subflows (`flow` node), and every registered smithy tool;
+  (`set` node), subflows (`flow` node), and every registered smithcore tool;
   free-form graph editing with minimap and zoom
 - **Flowchart-standard shapes** — diamonds for decisions/loops, stadium
   terminators, card-shaped tool nodes, red `err` output for error handling
@@ -21,7 +21,7 @@ the flow step by step — in the browser, against the local smithy engine.
 - **Record → flow** — click **Record**, perform the actions on the desktop
   (clicks + typed text are captured with their selectors), press **Stop**, and
   the recording lands on the canvas as a runnable flow (needs the `record`
-  extra + `smithy-engine[windows]`)
+  extra + `smithcore-engine[windows]`)
 - **SheRPA-style selectors** — selector fields rendered as one XML-like string
   (`<Element name="OK" control_type="Button"/>`), editable inline or through an
   attribute modal; copy/paste selectors between blocks
@@ -33,12 +33,12 @@ the flow step by step — in the browser, against the local smithy engine.
 ## Install
 
 ```bash
-pip install smithy-designer
+pip install smithcore-designer
 ```
 
 Requires Python 3.11+. For Windows UI-automation tools install the engine with
-its `windows` extra: `pip install "smithy-engine[windows]"`. For **Record →
-flow** also install the recorder extra: `pip install "smithy-designer[record]"`.
+its `windows` extra: `pip install "smithcore-engine[windows]"`. For **Record →
+flow** also install the recorder extra: `pip install "smithcore-designer[record]"`.
 
 ## Quick start
 
@@ -47,19 +47,19 @@ flow** also install the recorder extra: `pip install "smithy-designer[record]"`.
 cd designer-web && npm install && npm run build && cd ..
 
 # run the designer (opens the browser):
-smithy-designer flow.json
+smithcore-designer flow.json
 # or:
-python -m smithy_designer flow.json
+python -m smithcore_designer flow.json
 ```
 
 The server binds to `127.0.0.1:8756` and serves the prebuilt bundle from
-`designer-web/dist` (or `src/smithy_designer/static` in installed packages).
+`designer-web/dist` (or `src/smithcore_designer/static` in installed packages).
 
 ## Flow file
 
 The flow document format is versioned — see the
-[flow format contract](https://github.com/as-kurosss/smithy-engine#flow-format-v2)
-in the smithy repo. Current version: **v2**.
+[flow format contract](https://github.com/as-kurosss/smithcore-engine#flow-format-v2)
+in the smithcore repo. Current version: **v2**.
 
 ## Flow project
 
@@ -81,17 +81,17 @@ flows/
 - **Publish** ships the whole project as one pack (all flow files), so
   subflows travel with the main flow.
 
-## Publishing a flow to smithy-cloud
+## Publishing a flow to smithcore-cloud
 
-A flow becomes a **pack** (`smithy-pack-v1`) and is pushed to a
-[smithy-cloud](https://github.com/as-kurosss/smithy-cloud) orchestrator. The
+A flow becomes a **pack** (`smithcore-pack-v1`) and is pushed to a
+[smithcore-cloud](https://github.com/as-kurosss/smithcore-cloud) orchestrator. The
 cloud materializes a process named after the pack, and Windows agents run it
 with the engine — packs ship *flows*, not Python code, so there is no runner
 shim and nothing from the pack is imported:
 
 ```bash
 # create an API token once (web UI → avatar → API tokens), then:
-python -m smithy_designer.publish flow.web.json \
+python -m smithcore_designer.publish flow.web.json \
     --url http://your-orchestrator:8000 \
     --token sct_... \
     --name my-flow \
@@ -116,7 +116,7 @@ pip install -e ".[dev,tui]"
 # frontend (vite dev server proxies /api to :8756)
 cd designer-web && npm install && npm run dev
 # in another terminal
-smithy-designer flow.json
+smithcore-designer flow.json
 ```
 
 ## License

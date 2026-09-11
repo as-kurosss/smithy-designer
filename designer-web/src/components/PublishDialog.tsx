@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Modal from "@/components/ui/modal";
 
-const SETTINGS_KEY = "smithy.publish";
+const SETTINGS_KEY = "smithcore.publish";
 
 interface PublishSettings {
   url: string;
