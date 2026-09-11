@@ -34,6 +34,11 @@ packages = ["src/smithcore_designer"]
 # ship the prebuilt UI inside the wheel (built by CI / manually)
 force-include = { "designer-web/dist" = "src/smithcore_designer/static" }
 
+# the UI bundle is git-ignored, so it must be forced into the sdist too —
+# otherwise a wheel built from the sdist (e.g. `uv publish`) misses it.
+[tool.hatch.build.targets.sdist]
+force-include = { "designer-web/dist" = "designer-web/dist" }
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
