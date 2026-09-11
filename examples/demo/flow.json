@@ -6,8 +6,8 @@
       "kind": "start",
       "config": {},
       "position": [
-        80,
-        140
+        151,
+        3
       ]
     },
     {
@@ -18,8 +18,8 @@
         "class_name": "Intermediate D3D Window"
       },
       "position": [
-        320,
-        140
+        126,
+        75
       ],
       "tool": "windows.click"
     },
@@ -31,8 +31,8 @@
         "class_name": "Intermediate D3D Window"
       },
       "position": [
-        560,
-        140
+        126,
+        149
       ],
       "tool": "windows.click"
     },
@@ -41,8 +41,8 @@
       "kind": "end",
       "config": {},
       "position": [
-        800,
-        140
+        150,
+        240
       ]
     }
   ],

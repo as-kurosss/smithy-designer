@@ -42,6 +42,36 @@ _MAX_LOG = 500
 _MAX_REPL = 100
 
 _LOG_LIMIT = 400
+_MAX_EXPR_LEN = 2000
+_MAX_EXPR_NODES = 200
+_MAX_POW_EXP = 30
+_MAX_POW_BASE_ABS = 10**6
+_MAX_MUL_REPEAT = 10_000
+_MAX_STATE_VAR_BYTES = 10_000
+_MAX_STATE_TOTAL_BYTES = 200_000
+
+#: Mutating container methods are blocked in the REPL: the scope is shared
+#: with the running debug session, so `data.clear()` would corrupt it.
+_BLOCKED_METHODS = frozenset(
+    {
+        "clear",
+        "pop",
+        "popitem",
+        "update",
+        "setdefault",
+        "append",
+        "extend",
+        "insert",
+        "remove",
+        "sort",
+        "reverse",
+        "discard",
+        "add",
+        "difference_update",
+        "intersection_update",
+        "symmetric_difference_update",
+    }
+)
 
 
 class DebugError(FlowError):
@@ -50,6 +80,34 @@ class DebugError(FlowError):
 
 def _jsonable(value: Any) -> Any:
     return jsonable(value)
+
+
+def _truncate_variables(variables: dict[str, Any]) -> dict[str, Any]:
+    """Bound /api/debug/state payload: huge tables no longer OOM the poll loop."""
+    import json as _json
+
+    out: dict[str, Any] = {}
+    total = 0
+    for key, value in variables.items():
+        rendered: Any = _jsonable(value)
+        try:
+            size = len(_json.dumps(rendered, ensure_ascii=False, default=str))
+        except (TypeError, ValueError):
+            size = _MAX_STATE_VAR_BYTES + 1
+        if size > _MAX_STATE_VAR_BYTES:
+            preview = short(repr(rendered), _MAX_STATE_VAR_BYTES)
+            rendered = {
+                "__truncated__": True,
+                "type": type(value).__name__,
+                "preview": preview,
+            }
+            size = len(preview)
+        total += size
+        if total > _MAX_STATE_TOTAL_BYTES:
+            out[key] = {"__truncated__": True, "type": "…", "preview": "… state cap …"}
+            continue
+        out[key] = rendered
+    return out
 
 
 # -- REPL sandbox (debugger-only: the flow runner never evaluates Python) --
@@ -99,6 +157,8 @@ _CMP_OPS: dict[type[ast.cmpop], Any] = {
 
 def _eval_node(node: ast.expr, variables: dict[str, Any]) -> Any:
     if isinstance(node, ast.Constant):
+        if isinstance(node.value, str) and len(node.value) > _MAX_EXPR_LEN:
+            raise DebugError("string literal too large")
         return node.value
     if isinstance(node, ast.Name):
         if node.id in variables:
@@ -107,9 +167,36 @@ def _eval_node(node: ast.expr, variables: dict[str, Any]) -> Any:
             return _SAFE_FUNCS[node.id]
         raise DebugError(f"name {node.id!r} is not defined")
     if isinstance(node, ast.BinOp) and type(node.op) in _BIN_OPS:
-        return _BIN_OPS[type(node.op)](
-            _eval_node(node.left, variables), _eval_node(node.right, variables)
-        )
+        left = _eval_node(node.left, variables)
+        right = _eval_node(node.right, variables)
+        if isinstance(node.op, ast.Pow):
+            try:
+                if isinstance(right, (int, float)):
+                    r = abs(right)
+                    lb = abs(left) if isinstance(left, (int, float)) else 0
+                    # Allows 2**64 and 10**100, blocks 10**10**10-class bombs.
+                    if (
+                        r > 1000
+                        or (lb > _MAX_POW_BASE_ABS and r > 6)
+                        or (lb >= 10 and r > 100)
+                    ):
+                        raise DebugError("pow operands too large (DoS guard)")
+            except DebugError:
+                raise
+            except Exception as exc:
+                raise DebugError("invalid pow operands") from exc
+        if isinstance(node.op, ast.Mult):
+            # Guard `"x" * 10**9` / `[..] * 10**9` memory bombs.
+            if isinstance(left, (str, list, tuple)) and isinstance(right, int):
+                if abs(right) > _MAX_MUL_REPEAT:
+                    raise DebugError("repetition too large (DoS guard)")
+            elif (
+                isinstance(right, (str, list, tuple))
+                and isinstance(left, int)
+                and abs(left) > _MAX_MUL_REPEAT
+            ):
+                raise DebugError("repetition too large (DoS guard)")
+            return _BIN_OPS[type(node.op)](left, right)
     if isinstance(node, ast.UnaryOp):
         value = _eval_node(node.operand, variables)
         if isinstance(node.op, ast.Not):
@@ -157,6 +244,9 @@ def _eval_node(node: ast.expr, variables: dict[str, Any]) -> Any:
             if func is None:
                 raise DebugError(f"function {node.func.id!r} is not allowed")
         elif isinstance(node.func, ast.Attribute):
+            attr = node.func.attr
+            if attr in _BLOCKED_METHODS:
+                raise DebugError(f"method {attr!r} is not allowed (mutating)")
             func = _eval_node(node.func, variables)
         else:
             raise DebugError("only plain and method calls are allowed")
@@ -187,7 +277,15 @@ def _eval_node(node: ast.expr, variables: dict[str, Any]) -> Any:
 
 
 def _eval_repl(expression: str, variables: dict[str, Any]) -> str:
-    tree = ast.parse(expression, mode="exec")
+    if len(expression) > _MAX_EXPR_LEN:
+        raise DebugError(f"expression too long (max {_MAX_EXPR_LEN} chars)")
+    try:
+        tree = ast.parse(expression, mode="exec")
+    except SyntaxError as exc:
+        raise DebugError(f"invalid syntax: {exc}") from exc
+    node_count = sum(1 for _ in ast.walk(tree))
+    if node_count > _MAX_EXPR_NODES:
+        raise DebugError(f"expression too complex (max {_MAX_EXPR_NODES} nodes)")
     if len(tree.body) != 1:
         raise DebugError("exactly one expression or one assignment is allowed")
     stmt = tree.body[0]
@@ -326,7 +424,7 @@ class FlowDebugger:
             "status": self._status,
             "current_node": self._current,
             "error": self._error,
-            "variables": _jsonable(self._variables),
+            "variables": _truncate_variables(self._variables),
             "log": self._log_entries,
             "repl": self._repl,
         }

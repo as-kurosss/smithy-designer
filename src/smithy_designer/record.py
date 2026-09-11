@@ -21,15 +21,19 @@ class RecordError(RuntimeError):
     """Raised for recorder misuse or a recorder-backend failure."""
 
 
+_MAX_RECORD_NODES = 5000
+
+
 class RecordSession:
     """A single in-process recording session."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, max_nodes: int = _MAX_RECORD_NODES) -> None:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._nodes: list[FlowNode] = []
         self._lock = threading.Lock()
         self._error: str | None = None
+        self._max_nodes = max_nodes
 
     @property
     def active(self) -> bool:
@@ -48,6 +52,15 @@ class RecordSession:
 
     def _record_step(self, node: FlowNode) -> None:
         with self._lock:
+            if len(self._nodes) >= self._max_nodes:
+                if self._error is None:
+                    self._error = (
+                        f"recording capped at {self._max_nodes} steps; "
+                        "stop and start a new session"
+                    )
+                # Signal the recorder thread to stop: further steps are dropped.
+                self._stop.set()
+                return
             self._nodes.append(node)
 
     def _run(self) -> None:
@@ -58,13 +71,16 @@ class RecordSession:
 
     def stop(self) -> dict[str, Any]:
         """Stop recording and return the captured flow-v2 document."""
-        if self._thread is None:
+        thread = self._thread
+        if thread is None:
             raise RecordError("no recording in progress")
         self._stop.set()
-        self._thread.join(timeout=15)
-        if self._thread.is_alive():
-            raise RecordError("recorder did not stop in time")
+        thread.join(timeout=15)
+        # Always drop the handle: a timed-out join must not leave
+        # active=True forever with a zombie thread behind it.
         self._thread = None
+        if thread.is_alive():
+            raise RecordError("recorder did not stop in time")
         if self._error is not None:
             error = self._error
             self._error = None

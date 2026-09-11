@@ -48,6 +48,33 @@ from smithy_designer.record import RecordError, RecordSession
 _FLOW_VERSION = 2
 _MAX_BODY_BYTES = 1_000_000
 _SUBFLOW_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_MAX_NODES = 2000
+_MAX_EDGES = 4000
+_MAX_CONFIG_BYTES = 200_000
+_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
+
+
+def _check_publish_fields(url: str, name: str, version: str, *, allow_insecure: bool) -> str:
+    """Validate publish target; refuse cleartext http to non-loopback hosts."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="url must be an http(s) URL")
+    if parsed.scheme == "http" and not allow_insecure:
+        host = (parsed.hostname or "").lower()
+        if host not in ("localhost", "127.0.0.1", "::1"):
+            raise HTTPException(
+                status_code=400,
+                detail="url must use https:// (pass allow_insecure=True to override; "
+                "token would travel in cleartext)",
+            )
+    if not _NAME_RE.match(name):
+        raise HTTPException(status_code=400, detail="invalid pack name")
+    if not _VERSION_RE.match(version):
+        raise HTTPException(status_code=400, detail="invalid pack version")
+    return url.rstrip("/")
 
 
 async def _read_json(request: Request, max_bytes: int = _MAX_BODY_BYTES) -> Any:
@@ -109,6 +136,26 @@ def _validate_flow(data: Any, registry: ToolRegistry | None = None) -> dict[str,
     edges = data.get("edges")
     if not isinstance(nodes, list) or not isinstance(edges, list):
         raise HTTPException(status_code=400, detail="nodes/edges must be lists")
+    if len(nodes) > _MAX_NODES:
+        raise HTTPException(
+            status_code=400, detail=f"too many nodes ({len(nodes)} > {_MAX_NODES})"
+        )
+    if len(edges) > _MAX_EDGES:
+        raise HTTPException(
+            status_code=400, detail=f"too many edges ({len(edges)} > {_MAX_EDGES})"
+        )
+    for node in nodes:
+        if isinstance(node, dict):
+            try:
+                size = len(json.dumps(node.get("config") or {}, ensure_ascii=False, default=str))
+            except (TypeError, ValueError):
+                size = 0
+            if size > _MAX_CONFIG_BYTES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"node {node.get('id')!r}: config too large "
+                    f"({size} > {_MAX_CONFIG_BYTES})",
+                )
 
     problems = validate_document(data)
 
@@ -232,8 +279,13 @@ def create_app(flow_path: Path) -> FastAPI:
         data = await _read_json(request)
         _validate_flow(data, registry)
         target = resolve_flow(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        payload = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+
+        def _write() -> None:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(payload, encoding="utf-8")
+
+        await asyncio.to_thread(_write)
         return {"status": "saved", "path": rel_of(target)}
 
     @app.post("/api/flows")
@@ -252,11 +304,13 @@ def create_app(flow_path: Path) -> FastAPI:
             raise HTTPException(status_code=400, detail="invalid subflow name")
         if target.exists():
             raise HTTPException(status_code=409, detail=f"subflow {raw}.json already exists")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(
-            json.dumps(_starter_subflow(), ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        payload = json.dumps(_starter_subflow(), ensure_ascii=False, indent=2) + "\n"
+
+        def _write_starter() -> None:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(payload, encoding="utf-8")
+
+        await asyncio.to_thread(_write_starter)
         return {"path": rel_of(target), "name": f"{raw}.json"}
 
     @app.post("/api/publish")
@@ -276,16 +330,22 @@ def create_app(flow_path: Path) -> FastAPI:
             raise HTTPException(status_code=400, detail="name must be a non-empty string")
         if not isinstance(version, str) or not version.strip():
             raise HTTPException(status_code=400, detail="version must be a non-empty string")
+        allow_insecure = bool(data.get("allow_insecure"))
+        _check_publish_fields(url, name, version, allow_insecure=allow_insecure)
         try:
-            return publish_flow(
+            import functools
+
+            call = functools.partial(
+                publish_flow,
                 root,
                 url,
                 token,
                 name,
                 version,
                 entry={"process": main_rel},
-                allow_insecure=bool(data.get("allow_insecure")),
+                allow_insecure=allow_insecure,
             )
+            return await asyncio.to_thread(call)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
